@@ -1,0 +1,698 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+
+
+Figures and analysis accompanying
+"Vector-clustering Multiple Sequence Alignment: Aligning into the twilight zone of protein sequence similarity with protein language models"
+Claire McWhite & Mona Singh
+
+
+Set up
+```{r}
+
+library(tidyverse)
+library(colorspace)
+library(cowplot)
+library(plotly)
+library(ggridges)
+theme_set(theme_cowplot(font_size = 8))
+
+
+#0 = orange, 1 = lightblue, 2 = green, 3  = yellow, 4 = blue, 5 = red, 6 = pink, 7 = gray
+palette_OkabeIto <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+colorspace::swatchplot(palette_OkabeIto)
+
+
+```
+
+```{r}
+library(seqinr)
+read_fasta <- function(fasta_filename, annot = FALSE){
+    fasta <- seqinr::read.fasta(fasta_filename, as.string = TRUE)
+
+    # Convert seqinr SeqFastadna object to data.frame
+    fasta_df <- fasta %>%
+                   sapply(function(x){x[1:length(x)]}) %>%
+                   as.data.frame %>%
+                   broom::fix_data_frame(newcol = "ID", newnames = "Sequence")
+
+    if(annot == TRUE){
+        annot_df <- getAnnot(fasta) %>%
+                         sapply(function(x){x[1:length(x)]}) %>%
+                         as.data.frame() %>%
+                         broom::fix_data_frame(newnames = "Annot")
+
+        fasta_df <- cbind(fasta_df, annot_df)
+    }
+    return(fasta_df)
+}
+```
+
+
+
+Analysis for Figure 2A & B
+```{r}
+
+files <- fs::dir_ls("/scratch/gpfs/cmcwhite/aln_datasets/model_training_prots/",glob = "*.filt.fasta.t5.16layers.padding0.nobc.csv")# %>% head(200)
+
+dat <- read_csv(files, id="path",  show_col_types = FALSE, col_names = c("fasta", "seq1", "seq2", "aa1", "aa2", "sim"))
+
+
+
+dat_formatted <- dat %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein", NA, NA, "model", "layers", "padding", "bc", NA), sep= "[.]")
+
+refs <- read_csv("/scratch/gpfs/cmcwhite/aln_datasets/quantest2/QuanTest2/Labels/match_positions_both.csv", col_names = c("protein", "aa1", "aa2", "label"))
+
+
+total_aligned_positions <- refs %>%
+  filter(label == 1) %>%
+  filter(grepl("^0-", aa1)) %>%
+  filter(grepl("^1-", aa2)) %>%
+  group_by(protein) %>%
+     summarize(aligned_positions = n())
+
+
+dat_formatted_ref <- dat_formatted %>%
+  left_join(refs)
+
+#protein_sel <- dat_formatted_ref %>% select(protein) %>%  unique %>% sample_n(100) %>% pull(protein)
+  
+dat_evaluated_aa1 <- dat_formatted_ref %>%
+ # filter(protein %in% protein_sel)  %>%
+   arrange(desc(sim))%>%
+
+  group_by(protein, aa1, model, padding, bc) %>%
+    mutate(rank_aa1 = row_number()) %>%
+  ungroup %>%
+  filter(rank_aa1 == 1)
+  
+dat_evaluated_aa2 <- dat_formatted_ref %>%
+ # filter(protein %in% protein_sel)  %>%
+   arrange(desc(sim))%>%
+
+  group_by(protein, aa2, model, padding, bc) %>%
+    mutate(rank_aa2 = row_number()) %>%
+  ungroup %>%
+  filter(rank_aa2 == 1)
+  
+
+dat_evaluated_rbh <- dat_evaluated_aa1 %>%
+  full_join(dat_evaluated_aa2 ) %>%
+     rowwise() %>%
+  mutate(true_rbh = case_when(label == 1 && rank_aa1 == 1 &&  rank_aa2 == 1 ~ "true_rbh"))
+
+
+# Check for first position
+dat_evaluated_rbh %>%
+  group_by(label, model, padding, bc) %>%
+     summarize(mean = mean(sim))
+
+dat_evaluated_rbh %>%
+  group_by(label, model, padding, bc, true_rbh) %>%
+     summarize(n = n()) %>%
+  filter(true_rbh == "true_rbh")
+
+bc_eval <- dat_evaluated_rbh %>%
+  filter(label ==1) %>%
+  filter(true_rbh == "true_rbh") %>%
+  group_by(protein, label, model, padding, bc, true_rbh) %>%
+     summarize(n = n()) 
+```
+
+
+
+Test files
+```{r}
+#directory_fasta <- "/scratch/gpfs/cmcwhite/aln_datasets/model_training_prots/"
+#fasta_files <- fs::dir_ls(directory_fasta, glob= "**fasta")
+
+#homstrad_fastas <- map_dfr(fasta_files, ~read_fasta(paste0(.)), .id = "fasta") 
+
+theme_set(theme_cowplot(font_size = 8))
+
+
+#prot_lengths <- homstrad_fastas %>%
+#    mutate(length = str_length(Sequence)) %>%
+#  select(-Sequence) %>%
+#  group_by(fasta) %>%
+#      mutate(row = row_number()) %>%
+#  #filter(row == 1) %>%
+#  ungroup %>%
+#  mutate(protein = basename(fasta)) %>%
+#  mutate(protein = str_replace(protein, ".filt.fasta", "")) %>%
+#  select(-fasta)
+
+# Figure 2A
+correct_pos<- bc_eval %>%
+  left_join(total_aligned_positions) %>%
+  mutate(prop_correct = n/aligned_positions) %>%
+  filter(padding == "padding0") %>%
+     ggplot(aes(x= prop_correct)) +
+        geom_histogram(binwidth = 0.05) +
+  scale_y_continuous(expand = c(0,0)) +
+  xlim(0,1) +
+ 
+  xlab("Proportion correct positions") +
+  ylab("Count of proteins")
+
+
+
+# In text value of number of alignments over where >50% of aligned columns are also reciprocal best hits
+num_aligns <- nrow(bc_eval)
+num_aligns_over_0.5correct <- bc_eval %>%
+  left_join(total_aligned_positions) %>%
+  mutate(prop_correct = n/aligned_positions) %>%
+  filter(prop_correct >= 0.5) %>%
+  nrow()
+
+
+num_aligns_over_0.5correct/num_aligns
+
+
+homstrad_sims <- read_csv("/scratch/gpfs/cmcwhite/aln_datasets/homstrad_aln_sims.csv") %>%
+  mutate(protein = str_replace(file, ".filt.aln", "")) %>% select(-file)
+# Do similarity 
+
+
+# Figure out when batch_correction is useful
+#COX2 155-162
+#ACT 52-57
+#adeno_fiber 109-112
+#capsid_n 52-55
+
+# Figure 2B
+sim_correct_plot <- bc_eval %>%
+  left_join(prot_lengths) %>%
+  left_join(homstrad_sims)%>%
+   mutate(prop_correct = n/length) %>%
+  filter(padding == "padding0") %>%
+     ggplot(aes(x= same, y =  prop_correct, label = protein)) +
+        geom_point(color = "grey50", alpha = 0.6, size = 1) +
+  ylab("Proportion correct positions") +
+  xlab("Reference alignment identity") +
+    scale_y_continuous(limits = c(0,1)) +
+  background_grid(major = "y")
+sim_correct_plot
+
+Figure2 <- plot_grid(correct_pos, sim_correct_plot, labels= c("A", "B"), label_size = 8)
+Figure2 %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.png", ., height = 2, width = 4,, units = "in", dpi = 600)
+Figure2 %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.pdf", ., height = 2, width = 4, units = "in")
+
+# In text value
+bc_eval %>%
+  left_join(prot_lengths) %>%
+   mutate(prop_correct = n/length) %>%
+  filter(prop_correct >= 0.5)
+
+median(tmp$prop_correct)
+
+
+```
+
+
+
+Remove files where the three reference, and rest of the proteins are substantially different sizes
+```{r}
+directory_fasta <- "/scratch/gpfs/cmcwhite/aln_datasets/quantest2/QuanTest2/Test/"
+fasta_files <- fs::dir_ls(directory_fasta, glob= "*20seqs*fasta")
+
+length_diffs <- map_dfr(fasta_files, ~read_fasta(paste0(.)), .id = "fasta") %>%
+  mutate(prot = basename(fasta)) %>%
+  mutate(prot = str_replace(prot, ".vie.20seqs.fasta", "")) %>%
+  select(-fasta) %>%
+  mutate(ref = case_when(ID %in% c("seq0001", "seq0002", "seq0003") ~ TRUE,
+                         TRUE~ FALSE)
+                 ) %>%
+  mutate(seqlen = str_length(Sequence)) %>%
+  group_by(prot, ref) %>%
+     summarize(mean_len = mean(seqlen)) %>%
+  pivot_wider(names_from = ref, values_from = mean_len) %>%
+  mutate(diff = `TRUE`/`FALSE`) %>%
+  mutate(log2diff = log2(diff)) %>%
+  mutate(abs_log2fc = abs(log2diff)) %>% arrange(desc(abs_log2fc))
+
+extreme_length_diffs <- length_diffs %>% filter(abs_log2fc >= 2) %>% pull(prot)
+
+
+
+```
+
+
+Input files
+```{r}
+# Chainbreak seems to be less of a problem now
+#chainbreak_prot <- read_csv("/home/cmcwhite/aln_results/families_to_exclude.txt", col_names = "prot")
+
+# Gold standard identities
+sims <- read_csv("/home/cmcwhite/aln_results/Sims_ref.csv") %>%
+  mutate(prot = str_replace(file, ".ref", "")) %>% select(-file) %>% 
+  # filter(!prot %in% chainbreak_prot$prot) %>%
+    mutate(identbin = round(same, digits = 1)) 
+
+allscores <- read_csv("/scratch/gpfs/cmcwhite/aln_comparison/eval_scores.csv", col_names = FALSE) %>%
+  select(score = X1, experiment = X2, score_type = X4, prot = X5) %>%
+  filter(!is.na(prot)) %>%
+  mutate(set = 20)
+
+
+allscores_standard <- allscores %>%
+  mutate(score_type = str_replace(score_type, "_", "")) %>%
+  filter(score_type %in% c("sp", "tc", "col", "tcHGI", "tcHGIEB")) %>%
+  separate(experiment, into = c("tmp0", "tmp1", 'set', "tmp2", 'layers', 'model'), sep = "_", extra = "merge", remove = FALSE) %>%
+  separate(prot , into = c("prot", "style", "tmp4", "alg"), extra = "drop", sep = "[.]") %>%
+  mutate(layers = case_when(is.na(layers) ~ "None", TRUE ~ layers)) %>%
+  mutate(model = case_when(is.na(model) ~ "None", TRUE ~ model))  %>%
+  mutate(alg = case_when(grepl("layer", experiment) ~ "semantic", TRUE ~ alg))  %>%
+  filter(alg != "MAFFT-FINSI") %>% # Not named correctly, this is MAFFT-LINSI
+  mutate(set = "20") %>%
+  
+  mutate(score= as.numeric(score))# %>%
+
+
+
+```
+
+
+
+
+
+Secondary structure measure 
+```{r}
+
+ allscores_ss <- allscores %>%
+  filter(!score_type %in% c("sp", "tc", "col")) %>% 
+  separate(experiment, into = c('set', NA, 'layers', NA, 'model'), sep = "_", extra = "merge", remove = FALSE) %>%
+  separate(prot , into = c("prot",  NA, "alg"), extra = "drop", sep = "[.]") %>%
+  mutate(layers = case_when(is.na(layers) ~ "None", TRUE ~ layers)) %>%
+  mutate(model = case_when(is.na(model) ~ "None", TRUE ~ model))  %>%
+  mutate(alg = case_when(grepl("layer", experiment) ~ "semantic", TRUE ~ alg))  %>%
+  filter(experiment != "20seqs_nopca") %>%
+  mutate(score= as.numeric(score)) %>%
+       filter(!prot %in% chainbreak_prot$prot)
+
+
+
+ allscores_ss %>%
+    filter(model != "fa_hilo") %>%
+    filter(model != "fa_hilo_tmp") %>%
+  filter(score_type == "col_HGIEB") %>%
+   unique() %>%
+  group_by(experiment, model, alg) %>%
+     summarize(medianscore = median(score), meanscore = mean(score),n = n()) %>%
+  ungroup %>%
+  arrange(desc(medianscore)) %>% View()
+
+```
+
+
+
+
+### Functions for comparing and plotting
+```{r}
+
+get_layer_compare <- function(allscores_standard, experiment_name, score_type = "col") {
+
+layer_compare_sel <- allscores_standard %>%
+    filter(experiment %in% c({{experiment_name}}, "20seqs_prog")) %>% # 
+  left_join(sims) %>%
+  unique %>%
+  select(score, prot, alg, score_type, same, sim, identbin)
+
+
+  print(layer_compare_sel)
+
+
+layer_compare_semantic <- layer_compare_sel %>% filter(alg == "semantic") %>% select(-alg) %>% rename(semantic = score)
+layer_compare_others <- layer_compare_sel %>% filter(alg != "semantic") %>% rename(other = score)
+layer_compare_compare <- layer_compare_semantic %>%
+  filter(score_type == {{score_type}}) %>%
+
+  left_join(layer_compare_others, by = c("prot", "score_type", "same", "sim", "identbin")) %>%
+    filter(!is.na(alg))
+
+print(layer_compare_sel)
+prots_per_identbin <- layer_compare_compare %>%
+  select(prot, identbin) %>%
+  unique() %>%
+  group_by(identbin) %>%
+   summarize (n= n()) %>%
+  ungroup()
+
+perform_plot_setup <- layer_compare_compare %>% mutate(scorediff = semantic - other) %>%
+  mutate(winner = case_when(scorediff > 0 ~ "Better",
+                            scorediff < 0 ~ "Worse")) %>%
+  filter(!is.na(winner)) %>%
+
+  group_by(alg, score_type, winner) %>%
+    mutate(totwins = n()) %>%
+  ungroup %>%
+  group_by(alg, score_type, winner, identbin, totwins) %>%
+      summarize(num = n()) %>%
+  ungroup()
+
+return(layer_compare_compare)
+}
+
+# Figure 3A plotting function
+perform_plot_fxn <- function(layer_compare_compare){
+order2 <- c("extra vs. vcMSA", "MAFFT-FFTNS1 vs. vcMSA" ,  'FAMSA vs. vcMSA','PROBCONS vs. vcMSA',  "CLUSTALO vs. vcMSA", "MAFFT-GINSI vs. vcMSA", "MAFFT-LINSI vs. vcMSA", "UPP vs. vcMSA", "TCOFFEE vs. vcMSA")
+
+print(layer_compare_compare )
+
+
+perform_plot <-layer_compare_compare %>%
+  mutate(alg = paste0(alg," vs. vcMSA" )) %>%
+  mutate(win = case_when(vcMSA > other ~ "win", TRUE ~ "loss")) %>%
+  arrange(win) %>%
+  mutate(win = fct_inorder(win)) %>%
+  mutate(new_y = (other + vcMSA )/sqrt(2)) %>%
+    mutate(new_x = (vcMSA -other)/sqrt(2)) %>%
+  mutate(diff =vcMSA  - other) %>%
+  
+  ggplot(aes(x = new_x, y = new_y)) +
+  geom_point(aes( label = paste(prot, other, vcMSA ), color = same), alpha = 0.7, size = 1) +
+ 
+  geom_abline(intercept = 0, slope = 1, size = 0.1, color = "black") + 
+  geom_abline(intercept = 0, slope =-1, size = 0.1, color = "black") + 
+      theme(strip.background = element_blank()) +
+  xlab("Column score") +
+  ylab("vcMSA\nColumn score") + 
+   geom_vline(xintercept = 0, color = "red", linetype = "dashed") + 
+  scale_color_continuous_sequential(palette = "viridis", name = "Sequence\nidentity", rev = FALSE)+
+  scale_y_continuous(limits = c(-.1, 150.1), expand = c(0,0)) +
+    scale_x_continuous(limits = c(-70.7,70.7), expand = c(0,0)) +
+ facet_wrap(~fct_relevel(alg, order2)) +
+  theme(panel.spacing.x =  unit(1.5, "lines")) +
+  theme(axis.line = element_blank(), axis.ticks = element_blank(), axis.title = element_blank(), axis.text = element_blank())
+
+return(perform_plot)
+}
+
+```
+
+### Figure 3A
+```{r}
+
+theme_set(theme_cowplot(font_size = 8))
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad<- allscores_standard %>%
+      filter(!prot %in% extreme_length_diffs) %>%
+  get_layer_compare(., "aln_evaluate_20_nopca_16layer_t5_padding0_nobc", score_type = "tc") %>%
+  rename(vcMSA = semantic)
+  
+  #%>% pull(prot) %>% unique
+add_extra = score_compare_aln_evaluate_20_nopca_16layer_t5_nopad %>% filter(alg == "CLUSTALO") %>%
+    mutate(alg = "extra")
+
+
+bind_rows(score_compare_aln_evaluate_20_nopca_16layer_t5_nopad, add_extra)
+
+
+plot_16_nopad <- perform_plot_fxn(bind_rows(score_compare_aln_evaluate_20_nopca_16layer_t5_nopad, add_extra))
+plot_16_nopad
+
+
+plot_16_nopad %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/plot_16_nopad.png", ., height = 5, width = 5.8,, units = "in", dpi = 600)
+plot_16_nopad%>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/plot_16_nopad.pdf", ., height = 5, width = 5.8, units = "in")
+
+
+
+```
+
+
+
+```{r}
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad_HGIEB <- allscores_standard %>%
+      filter(!prot %in% extreme_length_diffs) %>%
+  get_layer_compare(., "aln_evaluate_20_nopca_16layer_t5_padding0_nobc", score_type = "tc_HGIEB") %>%
+  rename(vcMSA = semantic) 
+perform_plot_fxn(score_compare_aln_evaluate_20_nopca_16layer_t5_nopad_HGIEB)
+
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad_HGIEB
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad_HGIEB
+
+
+```
+
+In text values about combining subalignments
+```{r}
+has_excluded <- read_csv("/scratch/gpfs/cmcwhite/aln_comparison/aln_evaluate_20_nopca_16layer_t5_padding0_nobc//alignment_files/has_excluded.txt") %>% mutate(set = "excluded")
+has_clusters <- read_csv("/scratch/gpfs/cmcwhite/aln_comparison/aln_evaluate_20_nopca_16layer_t5_padding0_nobc//alignment_files/has_seqgroups.txt") %>% mutate(set =  "seqgroups") 
+
+both_stitched <- bind_rows(has_clusters, has_excluded) %>%
+  separate(filename, into = c(NA, "filename"), sep= "[/]") %>%
+  separate(filename, into = c("prot", NA), sep = "[.]") %>%
+  filter(!prot %in% extreme_length_diffs) 
+
+
+both_stitched %>% group_by(set) %>%
+     summarize(n = n())
+
+both_stitched %>% select(prot) %>% unique %>% nrow()
+
+
+
+both_stitched %>%
+  left_join(sims)
+
+
+```
+
+
+
+#### Values in Figure 3A
+Win percent
+```{r}
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad %>%
+           filter(!prot %in% extreme_length_diffs) %>%
+  mutate(win = case_when(vcMSA >= other ~ "Win",
+                         TRUE ~ "Lose")) %>%
+  group_by(score_type, alg, win) %>%
+      summarize(n = n()) %>%
+  ungroup %>% 
+  pivot_wider(names_from = win, values_from = n) %>%
+  arrange(desc(Win))
+
+```
+
+```{r}
+
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad %>%
+           filter(!prot %in% extreme_length_diffs) %>%
+   mutate(dif = vcMSA  - other) %>%
+  group_by(alg) %>%
+     summarize(totdiff = sum(dif)) %>%
+   arrange(desc(totdiff))
+
+```
+
+
+```{r}
+
+score_compare_aln_evaluate_20_nopca_16layer_t5_nopad %>%
+  group_by(identbin, alg, score_type) %>%
+     summarize(avg_score = median(vcMSA ), avg_other = median(other))
+
+
+```
+
+
+### Figure 3B
+```{r}
+clustalo <- allscores_standard %>%
+         filter(!prot %in% extreme_length_diffs) %>%
+  filter(alg == "CLUSTALO") %>%
+  filter(set ==20) %>%
+  filter(score_type == "tc")
+
+mg <- allscores_standard %>%
+         filter(!prot %in% extreme_length_diffs) %>%
+  filter(alg == "MAFFT-GINSI") %>%
+  filter(set ==20) %>%
+  filter(score_type == "tc")
+
+semantic <- allscores_standard %>%
+         filter(!prot %in% extreme_length_diffs) %>%
+  filter(experiment == "aln_evaluate_20_nopca_16layer_t5_padding0_nobc") %>%
+  filter(score_type == "tc") %>%
+  mutate(alg = "vcMSA")
+
+both <- bind_rows(mg, clustalo, semantic)  %>% left_join(sims)
+
+
+ident_plot <- both %>% group_by(alg, identbin) %>%
+  mutate(identbin = case_when(identbin >= 0.6 ~ 0.6,
+                              TRUE ~ identbin)) %>%
+    summarize(medianscore= median(score), n = n()) %>%
+  ggplot(aes(x = identbin, y = medianscore, color = fct_relevel(alg, c("vcMSA",  "MAFFT-GINSI" ,"CLUSTALO")))) +
+       geom_point(alpha = 1, size = 1.5) +
+  
+  scale_color_manual(values = c("blue", "#E69F00", "#D55E00") ,name = "Algorithm") +
+  background_grid(major = "y") +
+  xlab("Sequence identity bin") +
+  ylab("Median Total Column score") +
+  scale_x_continuous(breaks = c(-0.1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6), limits = c(0,0.6)) +
+    scale_y_continuous(breaks = c(0, 20, 40, 60, 80, 100), limits = c(0,103), expand = c(0,0))
+ident_plot
+
+ident_plot %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/ident_plot.png", ., height = 2, width = 3,, units = "in", dpi = 600)
+ident_plot%>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/ident_plot.pdf", ., height = 2, width = 3, units = "in")
+
+```
+
+
+### Figure 3C
+```{r}
+
+#   separate(prot , into = c("prot", "style", NA, "alg"), extra = "drop", sep = "[.]")
+
+allseq_scores <- allscores_standard %>%
+  filter(!prot %in% extreme_length_diffs) %>%
+    filter(score_type == "tc") %>% 
+    filter(experiment == "aln_evaluate_20_nopca_16layer_t5_padding0_nobc" | experiment ==  "20seqs_prog") %>%
+ left_join(sims2) %>%
+  group_by(experiment, model, alg, identbin2) %>%
+     summarize(medianscore = median(score), meanscore = mean(score),n = n() ) %>% #, medianlen = median(alnLen), meanlen= mean(alnLen)) %>%
+  ungroup %>%
+
+  arrange(desc(medianscore)) 
+  
+sims2 <- sims %>%
+  mutate(identbin2 = case_when(identbin == 0.1 ~ 0.1,
+                               identbin == 0.2 ~ 0.2,
+                               TRUE ~ 0.3))
+
+struc_scores <- topscores <- allscores_standard %>%
+  #filter(model != "fa_hilo") %>%
+  #  filter(model != "fa_hilo_tmp") %>%
+  left_join(sims2)%>%
+  #filter(same < 0.3) %>%
+  filter(!prot %in% extreme_length_diffs) %>%
+  filter(score_type == "tcHGIEB") %>% 
+   # filter(prot %in% voro$prot) %>%
+ # filter(alg %in% c( "semantic") | tmp4 == "TCOFFEE") %>%
+  filter(experiment == "aln_evaluate_20_nopca_16layer_t5_padding0_nobc" | experiment ==  "20seqs_prog") %>%
+  
+  group_by(experiment, model, alg, tmp4, identbin2) %>%
+     summarize(medianscore_struct = median(score), meanscore_struct= mean(score),n = n() ) %>% #, medianlen = median(alnLen), meanlen= mean(alnLen)) %>%
+  ungroup %>%
+
+  arrange(desc(medianscore_struct))  %>%
+  mutate(alg = case_when(alg != "semantic" ~ tmp4, TRUE ~ alg))
+
+theme_set(theme_cowplot(font_size = 8))
+plot_ss <- allseq_scores %>%
+left_join(struc_scores, by = c("alg", "identbin2")) %>%
+   # filter(alg %in% c("TCOFFEE", "CLUSTALO", "semantic")) %>%
+  mutate(alg = case_when(alg == "semantic"~"vcMSA",
+                         TRUE ~ alg)) %>%
+  ggplot(aes(x = meanscore, y= meanscore_struct, color = fct_rev(fct_reorder(alg, meanscore_struct)))) +
+  geom_point() +
+  xlim(0,100) +
+  scale_color_manual(values = c("blue",palette_OkabeIto), name = "Algorithm") +
+  theme(strip.background = element_blank()) +
+  ylim(0,100) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  facet_wrap(~identbin2) +
+  xlab("Overall median Total Score") +
+  ylab("Secondary structure\nmedian Total Score")
+
+
+
+```
+
+
+```{r}
+
+fig3bc <- plot_grid(ident_plot, plot_ss, nrow = 1, rel_widths = c(0.43,0.7))
+
+
+fig3bc %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/fig3bc.png", ., height = 1.5, width = 6,, units = "in", dpi = 600)
+fig3bc%>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/fig3bc.pdf", ., height = 1.5, width = 6, units = "in")
+
+
+```
+
+
+
+
+Supplemental Figure 1A
+Illustrate first character effect
+```{r}
+
+dat_evaluated_rbh  %>% write_csv("/scratch/gpfs/cmcwhite/aln_comparison/dat_evaluated_rbh.csv")
+dat_formatted_ref   %>% write_csv("/scratch/gpfs/cmcwhite/aln_comparison/dat_formatted_ref.csv")
+
+
+# Conclusion from this... padding only really helps with the alignment is offset ex. 
+# Where padding helps
+#CODH (0-0-E/1-22-Q), cyclotide (0-0-S/1-3-S), cox (0-0-G/1-15-R), cytochr_c552 (0-0-A/1-6-G)
+dat_firstpos <- dat_evaluated_rbh %>% filter(label ==1) %>% filter(grepl("0-0-", aa1))#
+
+dat_firstpos %>%
+  group_by(padding ,true_rbh) %>% 
+    summarize(n = n())
+
+dat_formatted_ref %>%
+  group_by(label, model, padding, bc) %>%
+     summarize(mean = mean(sim))
+
+
+dat_sum <- dat_evaluated_rbh %>%
+  filter(label ==1) %>%
+  group_by(protein, true_rbh, label,model, padding, bc) %>%
+     summarize(n = n()) %>%
+  pivot_wider(names_from = true_rbh, values_from = n)
+
+dat_sum
+
+dat_sum %>%
+  select(-`NA`) %>%
+  pivot_wider(names_from = padding, values_from = true_rbh) %>%
+  mutate(diff = padding10-padding0) %>% arrange(desc(diff)) %>% View()
+
+library(ggridges)
+
+dat_evaluated %>%
+  mutate(label = replace_na(label, 0)) %>%
+  ggplot(aes(x = sim, fill =  paste(layers, padding, bc, label),  y = paste(layers, padding, bc))) +
+  geom_density_ridges(alpha =0.5) 
+
+```
+
+
+
+Supplemental Figure 1B
+Illustrate batch correction
+```{r}
+prebatch <- read_csv("/home/cmcwhite/alignment_files_ghf34_3.fasta.thresh0.70.13.t5.bc/ghf34_3.fasta.thresh0.70.13.t5.bc.alignment_group2.prebatch.png.pca.csv") %>% mutate(set ="Before\nbatch correction")
+postbatch <- read_csv("/home/cmcwhite/alignment_files_ghf34_3.fasta.thresh0.70.13.t5.bc/ghf34_3.fasta.thresh0.70.13.t5.bc.alignment_group2.postbatch.png.pca.csv") %>% mutate(set ="After\nbatch correction")
+
+prepostbatch <- bind_rows(prebatch, postbatch)
+
+bc_plot <- prepostbatch %>%
+  mutate(Sequence = case_when(seq == 0 ~ "Protein #1",
+                           seq == 1 ~ "Protein #2",
+                           seq == 2 ~ "Protein #3")) %>%
+  ggplot(aes(x = `0`, y = `1`, color = Sequence)) +
+     geom_point(size = 0.3) +
+  scale_color_manual(values= palette_OkabeIto, name = "") +
+  facet_wrap(~fct_rev(set), nrow = 1) +
+  theme(axis.ticks = element_blank(), axis.text = element_blank()) +
+  xlab("PC1") +
+  ylab("PC2") +
+  theme(legend.position = "bottom") +
+  theme(strip.background = element_blank())
+
+bc_plot %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/bc_plot.png", ., height = 1.5, width = 2, units = "in", dpi = 600)
+bc_plot %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/bc_plot.pdf", ., height = 1.5, width = 2, units = "in")
+
+```
+
+
+
+
