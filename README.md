@@ -115,7 +115,11 @@ optional arguments:
 
 ex.
 ```bash
-$ vcmsa
+fasta=LDLa.vie.20seqs.fasta
+layers='-16 -15 -14 -13 -12 -11 -10 -9 -8 -7 -6 -5 -4 -3 -2 -1'
+model=prot_t5_xl_uniref50
+suffix=.16layer.t5.aln
+vcmsa  -i $fasta -o $fasta.$suffix --layers  $layers  -m $model --exclude --pca_plot
 
 
 ```

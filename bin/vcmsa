@@ -1,22 +1,10 @@
 #!/usr/bin/env python3
 
-# To generate embeddings
 import torch
-from transformers import AutoTokenizer, AutoModel
-
-# To calculate similarity
-import faiss
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import normalize
-
-
 
 from vcmsa.src.vcmsa_embed import parse_fasta_for_embed, get_embeddings
 from vcmsa.src.vcmsa_utils import *
  
-#from vcmsa.utils import build_index_flat
-#from vcmsa.embed import parse_fasta_for_embed, get_embeddings 
-#from vcmsa.seqsim import get_seqsims
 
 # Printing for debugging with icecream
 try:
@@ -25,36 +13,7 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
-# This is combat with patsy requirement removed
-from transformer_infrastructure.combat2 import combat
-
-# For networks
-import igraph
-
-# For copying graph objects
-import copy
-
-# For parsing fasta
-from Bio import SeqIO
-
-# To layout alignment
-from Bio.Align import MultipleSeqAlignment
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
-
-# For plotting PCA
-import matplotlib.pyplot as plt
-import random
-
-
-
-# General purpose
-import pickle
 import argparse
-import numpy as np
-from pandas.core.common import flatten 
-import pandas as pd 
-from collections import Counter
 import logging
 
 
@@ -105,6 +64,9 @@ def get_align_args():
 
     parser.add_argument("-p", "--padding", dest = "padding",  type = int, required = False, default = 0, 
                         help="Number of characters of X to add to start and end of sequence (can be important for fragment sequences), default: 0")
+    parser.add_argument("-mi", "--max_iterations", dest = "max_iterations",  type = int, required = False, default = 100, 
+                        help="Number of iterations of limited search to run, default: 100")
+
     parser.add_argument("-l2", "--headnorm", dest = "headnorm",  action = "store_true", required = False, 
                         help="Take L2 normalization of each head")
     args = parser.parse_args()
@@ -130,17 +92,6 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
     if pca_plot:
        png_hidden_out = "{}/{}.initial.prebatch.png".format(record_dir, outfile_name)
        do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
-    
-    # Don't batch correct prior to sequence clustering
-    #batch_correct = False
-    #if batch_correct:
-    #  
-    #    #ic( list(range(len(seqs_aas)))) 
-    #    hidden_states = do_batch_correct(hidden_states, list(range(len(seqs_aas))), batch_list)
-    #       
-    #    if pca_plot:
-    #        png_hidden_out = "{}/{}.initial.postbatch.png".format(record_dir, outfile_name)
-    #        do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
     
 
     sequence_embedding_list = []
@@ -316,7 +267,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     batch_correct = args.batch_correct
     seqlens = [len(x) for x in seqs]
     ic("seqs", seqs, seqlens)
-
+    max_iterations = args.max_iterations # default 100
      
     numseqs = len(seqs)
     padded_seqlen = hstates_list.shape[1]
@@ -467,7 +418,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
 
     ############## CONTROL LOOP ###################
-    for gapfilling_attempt in range(0, 200):
+    for gapfilling_attempt in range(0, max_iterations):
         gapfilling_attempt = gapfilling_attempt + 1
         print("Align this is gapfilling attempt ", gapfilling_attempt)
         logging.info("gapfilling_attempt {}".format(gapfilling_attempt))
@@ -513,7 +464,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         apply_walktrap = False
 
         # Do one or two rounds of clustering between guideposts
-        if gapfilling_attempt in list(range(1, 100,2)):#  or gapfilling_attempt in [1, 2, 3, 4]:
+        if gapfilling_attempt in list(range(1, max_iterations, 2)):#  or gapfilling_attempt in [1, 2, 3, 4]:
 
             ic("Align by clustering within guideposts")
             # Don't allow modification of previous guideposts
@@ -726,7 +677,7 @@ if __name__ == '__main__':
     
             cluster_order, clustid_to_clust = clusts_from_alignment(alignment)
     
-            pring("attempt squish, merging adjacent non-overlapping clusters")       
+            print("attempt squish, merging adjacent non-overlapping clusters")       
             for rep in range(0,10):
                  prevclust = alignment
                  cluster_order, clustid_to_clust = squish_clusters(alignment, index, hidden_states, index_to_aa)                
@@ -792,30 +743,28 @@ if __name__ == '__main__':
 
         try:
             
-            # Work on path to mafft
-            #os.system("mafft --clustalout --merge key_table.txt --auto all_fastas_aln.fasta > {}".format(outfile))
-            os.system("singularity exec /scratch/gpfs/cmcwhite/mafft_7.475.sif mafft --clustalout --merge {}/{}.key_table.txt --auto {}/{}.all_fastas_aln.fasta > {}".format(record_dir, outfile_name, record_dir, outfile_name, outfile))
-               
+            os.system("mafft --clustalout --merge {}/{}.key_table.txt --auto {}/{}.all_fastas_aln.fasta > {}".format(record_dir, outfile_name, record_dir, outfile_name, outfile))
+  
             os.system("cat {}".format(outfile))
         except Exception as E:
             ic("Not doing mafft merge") 
     
-    for i in range(len(alignments)):
-                    mylist = []
-                    cluster_order, clustid_to_clust = clusts_from_alignment(alignments[i])
-                    for key, value in clustid_to_clust.items():
-                          clustid_embeddings = []
-                          indexes = [x.index for x in value]
-                          clustid_embeddings = np.take(hidden_states_list[i], indexes, 0)
-                          clustid_embeddings = normalize(clustid_embeddings, axis =1, norm = "l2")
-                          if len(indexes) > 1:
-                              cosim = cosine_similarity(clustid_embeddings)
-                              upper = cosim[np.triu_indices(cosim.shape[0], k = 1)]
-                              #ic(upper)
-                              mean_cosim = np.mean(upper)
-                          else:
-                             mean_cosim = 0
-                          ic(key, mean_cosim, len(indexes))
+    #for i in range(len(alignments)):
+    #                mylist = []
+    #                cluster_order, clustid_to_clust = clusts_from_alignment(alignments[i])
+    #                for key, value in clustid_to_clust.items():
+    #                      clustid_embeddings = []
+    #                      indexes = [x.index for x in value]
+    #                      clustid_embeddings = np.take(hidden_states_list[i], indexes, 0)
+    #                      clustid_embeddings = normalize(clustid_embeddings, axis =1, norm = "l2")
+    #                      if len(indexes) > 1:
+    #                          cosim = cosine_similarity(clustid_embeddings)
+    #                          upper = cosim[np.triu_indices(cosim.shape[0], k = 1)]
+    #                          #ic(upper)
+    #                          mean_cosim = np.mean(upper)
+    #                      else:
+    #                         mean_cosim = 0
+    #                      ic(key, mean_cosim, len(indexes))
 
 
 
@@ -823,5 +772,5 @@ if __name__ == '__main__':
 
 
 #@profile
-def consolidate_w_clustering(clusters_dict, seqs_aas_dict):
-    return(0) 
+#def consolidate_w_clustering(clusters_dict, seqs_aas_dict):
+   # return(0) 

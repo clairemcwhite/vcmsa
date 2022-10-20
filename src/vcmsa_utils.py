@@ -1,13 +1,12 @@
-from Bio import SeqIO
-from time import time
-import torch
-import igraph
+#!/usr/bin/env python3
+
+# To generate embeddings
+
+# To calculate similarity
 import faiss
-import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import normalize
-import igraph
-import logging
-import random
+
 # Printing for debugging with icecream
 try:
     from icecream import ic
@@ -15,6 +14,36 @@ try:
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
+# This is combat with patsy requirement removed
+from vcmsa.src.combat_vsmsa_mod import combat
+
+# For networks
+import igraph
+
+# For copying graph objects
+import copy
+
+# For parsing fasta
+from Bio import SeqIO
+
+# To layout alignment
+from Bio.Align import MultipleSeqAlignment
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+
+# For plotting PCA
+import matplotlib.pyplot as plt
+import random
+
+
+
+# General purpose
+import numpy as np
+from pandas.core.common import flatten
+import pandas as pd
+from collections import Counter
+import logging
+from time import time
 
 ###############################
 ### Classes
