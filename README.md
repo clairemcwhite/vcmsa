@@ -42,7 +42,7 @@ model.save_pretrained('prot_t5_xl_uniref50')
 
 
 ### Make conda environment
-- bash vcmsa/scripts/make_vcmsa_env.sh 
+- bash vcmsa/make_vcmsa_env.sh 
 
 
 ### Installation
