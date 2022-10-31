@@ -15,7 +15,7 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
 # This is combat with patsy requirement removed
-from vcmsa.src.combat_vsmsa_mod import combat
+from vcmsa.combat_vsmsa_mod import combat
 
 # For networks
 import igraph

@@ -2,8 +2,8 @@
 
 import torch
 
-from vcmsa.src.vcmsa_embed import parse_fasta_for_embed, get_embeddings
-from vcmsa.src.vcmsa_utils import *
+from vcmsa.vcmsa_embed import parse_fasta_for_embed, get_embeddings
+from vcmsa.vcmsa_utils import *
  
 
 # Printing for debugging with icecream
