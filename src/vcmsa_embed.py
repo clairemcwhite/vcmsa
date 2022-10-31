@@ -1,7 +1,7 @@
 from transformers import AutoTokenizer, AutoModel, AutoConfig, T5Tokenizer, T5EncoderModel
 
 
-from transformer_infrastructure.pca_embeddings import control_pca, load_pcamatrix, apply_pca
+from vcmsa.src.pca_embeddings import control_pca, load_pcamatrix, apply_pca
 import torch
 import torch.nn as nn
 from Bio import SeqIO
