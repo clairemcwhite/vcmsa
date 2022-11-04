@@ -113,7 +113,8 @@ def get_embed_args():
                         help="Additionally exclude outlier sequences from final alignment")
     parser.add_argument("-hds", "--heads", dest = "heads", required = False,
                         help="Additionally exclude outlier sequences from final alignment")
-
+    parser.add_argument("-co", "--cpu_only", dest = "cpu_only",  action = "store_true",
+                        help="If --cpu_only flag is included, will run on cpu even if gpu available")
     args = parser.parse_args()
     
     return(args)
@@ -364,7 +365,7 @@ class ListDataset(Dataset):
 
 
 
-def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, get_aa_embeddings = True, padding = 5, ragged_arrays = False, aa_pcamatrix_pkl = None, sequence_pcamatrix_pkl = None, heads = None, layers = None, strat="meansig"):
+def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, get_aa_embeddings = True, padding = 5, ragged_arrays = False, aa_pcamatrix_pkl = None, sequence_pcamatrix_pkl = None, heads = None, layers = None, strat="meansig", cpu_only = False):
     '''
     Encode sequences with a transformer model
 
@@ -388,12 +389,15 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
     print("device", device) 
     device_ids =list(range(0, torch.cuda.device_count()))
     print("device_ids", device_ids)
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() > 1 and  cpu_only == False:
        print("Let's use", torch.cuda.device_count(), "GPUs!")
        model = nn.DataParallel(model, device_ids=device_ids).cuda()
        #model.to(device_ids) ??? 
    
     else:
+       if cpu_only == True: 
+           print("Embedding on cpu, even though gpu available")
+
        model = model.to(device)
 
     batch_size = 1
@@ -544,19 +548,12 @@ if __name__ == "__main__":
                                                              padding = args.padding)
 
     print("First sequences")
-    #print(sequences)
     seqlens = [len(x) for x in sequences]
     
-    #if args.extra_padding:
-    #   padding = 5
-
-    #else: 
-    #   padding = 0
-    
-    #print(sequences_spaced)
     layers = args.layers
     heads = args.heads
-    padding = args.padding
+    padding = args.padding 
+    cpu_only = args.cpu_only
     if heads is not None:
        with open(heads, "r") as f:
          headnames = f.readlines()
@@ -580,7 +577,8 @@ if __name__ == "__main__":
                                     ragged_arrays = args.ragged_arrays,
                                     aa_pcamatrix_pkl = args.aa_pcamatrix_pkl, 
                                     sequence_pcamatrix_pkl = args.sequence_pcamatrix_pkl,
-                                    strat = args.strat)
+                                    strat = args.strat,
+                                    cpu_only = cpu_only)
    
     # Reduce sequence dimension with a new pca transform 
     if args.sequence_target_dim:
