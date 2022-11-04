@@ -59,6 +59,10 @@ def get_align_args():
     parser.add_argument("-m", "--model", dest = "model_name",  type = str, required = True,
                         help="Model name or path to local model")
 
+    parser.add_argument("-co", "--cpu_only", dest = "cpu_only",  action = "store_true",
+                        help="If --cpu_only flag is included, will run on cpu even if gpu available")
+
+
     parser.add_argument("-pca", "--pca_plot", dest = "pca_plot",  action = "store_true", required = False, 
                         help="If flagged, output 2D pca plot of amino acid clusters")
 
@@ -268,7 +272,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     seqlens = [len(x) for x in seqs]
     ic("seqs", seqs, seqlens)
     max_iterations = args.max_iterations # default 100
-     
+    cpu_only = args.cpu_only 
     numseqs = len(seqs)
     padded_seqlen = hstates_list.shape[1]
     embedding_length = hstates_list.shape[2]
@@ -619,7 +623,8 @@ if __name__ == '__main__':
                                     get_aa_embeddings = True,
                                     layers = layers,  
                                     padding = padding,
-                                    heads = headnames)
+                                    heads = headnames,
+                                    cpu_only = cpu_only)
 
 
     # The sequences are divided into groups
