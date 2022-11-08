@@ -555,7 +555,7 @@ if __name__ == '__main__':
     padding =args.padding
     seqsim_thresh  = args.seqsimthresh 
     do_clustering = True
-
+    cpu_only = args.cpu_only
     # get place to store output file
     outfile_path =  os.path.dirname(outfile)     
     outfile_name =   os.path.splitext(os.path.basename(outfile))[0] # get outfile without extension
