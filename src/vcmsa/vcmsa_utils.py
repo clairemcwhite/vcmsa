@@ -1265,7 +1265,10 @@ def remove_low_authority(G):
 
 
 def process_island(island, betweenness_cutoff = 0.1, apply_walktrap = True, prev_G = None, clusters = []):
-island_names = island.vs()['name'])
+    if len(island.vs()) < 4:
+        betweenness_cutoff = 1
+
+    island_names = island.vs()['name']
 
 
     if check_completeness(island_names) == True:
@@ -1274,24 +1277,26 @@ island_names = island.vs()['name'])
   
     elif len(island_names) <= min_dup(island_names, 1.2) or len(island_names) < 5:
         island_names, alternates_dict = remove_doubles_by_graph(island_names, island)
-           if check_completeness(island_names):
+        if check_completeness(island_names):
+               print("new cluster after remove_by_graph", island_names)
                #return(island_names) 
                clusters = clusters + island_names
     else:
         ################# 
         # Betweenness
-        new_island = remove_highbetweenness(island, betweenness_cutoff = 0.10)
+        new_island = remove_highbetweenness(island, betweenness_cutoff = betweenness_cutoff)
         new_islands = new_island.clusters(mode = "weak")
         if len(new_islands.subgraphs()) > 1:
             clusters = process_network(new_islands, clusters)
 
         else:
-            new_island_names = new_island.vs()['name'])
+            new_island_names = new_island.vs()['name']
             if check_completeness(new_island_names) == True:
                  clusters = clusters + new_island_names
             elif len(new_island_names) <= min_dup(new_island_names, 1.2) or len(new_island_names) < 5:
                  new_island_names, alternates_dict = remove_doubles_by_graph(new_island_names, new_island)
                  if check_completeness(new_island_names):
+                     
                      clusters = clusters + new_island_names
             else:
                ######################3
@@ -1299,10 +1304,10 @@ island_names = island.vs()['name'])
                new_new_island = remove_low_authority(new_island)
                new_new_islands = new_new_islands.clusters(mode = "weak")
                if len(new_new_islands.subgraphs()) > 1:
-                  new_clusters = process_network(new_new_islands)
+                  new_clusters = process_network(new_new_islands, betweenness_cutoff = betweenness_cutoff)
                   clusters.append(new_clusters)
                else:
-                  new_new_island_names = new_new_island.vs()['name'])
+                  new_new_island_names = new_new_island.vs()['name']
                   if check_completeness(new_new_island_names) == True:
                       clusters = clusters + new_new_island_names
                   elif len(new_new_island_names) <= min_dup(new_new_island_names, 1.2) or len(new_new_island_names) < 5:
@@ -1314,22 +1319,23 @@ island_names = island.vs()['name'])
                   else:
                       nnn_islands = new_new_islands.community_walktrap(steps = 3, weights = 'weight').as_clustering()
                       if len(nnn_islands.subgraphs()) > 1:
-                          clusters = process_network(nnn_islands, clusters)
+                          clusters = process_network(nnn_islands, clusters, betweenness_cutoff = betweenness_cutoff)
     return(clusters)
 
+
+# Work-in-progress new main clustering functions to replace first_clustering function
 def process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True, prev_G = None, clusters = []):
     
     islands = G.clusters(mode = "weak")
     for island in islands:
          clusters = process_island(island, clusters, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap)
 
+    for x in clusters:
+          print(x)
     return(clusters)
-         # If after any clustering step, more than one island is produced, return to process_network
 
 
     
-
-
 
 def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, prev_G = None):
     '''

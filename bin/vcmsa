@@ -5,6 +5,7 @@ print(sys.version)
 
 import torch
 
+import pickle
 from vcmsa.vcmsa_embed import parse_fasta_for_embed, get_embeddings
 from vcmsa.vcmsa_utils import *
  
@@ -371,6 +372,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         minclustsize = int(len(seqs)/2) + 1
         #if len(clusters_list) == 0:
         clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 0.1, ignore_betweenness = False, apply_walktrap = True)
+        #clusters_list = process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True)
 
     else:
         minclustsize = 2
