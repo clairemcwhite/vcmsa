@@ -1201,6 +1201,8 @@ def first_clustering(G,  betweenness_cutoff = .10, ignore_betweenness = False, a
     all_alternates_dict = {}
 
     # For each island, evaluate what to do
+
+    # Natural clusters
     for sub_G in islands.subgraphs():
         # Don't remove edges if G = size 2
         if len(sub_G.vs()) < 4:
@@ -1210,7 +1212,9 @@ def first_clustering(G,  betweenness_cutoff = .10, ignore_betweenness = False, a
 
         # First start with only remove very HB nodes
         new_G = remove_highbetweenness(sub_G, betweenness_cutoff = betweenness_cutoff)
+        # Natural clusters after removing high betweeneess nodes
         sub_islands = new_G.clusters(mode = "weak")
+
         for sub_sub_G in sub_islands.subgraphs():
 
             ic("first_clustering: betweenness cutoff", betweenness_cutoff, "apply_walktrap", apply_walktrap)
@@ -1226,12 +1230,117 @@ def first_clustering(G,  betweenness_cutoff = .10, ignore_betweenness = False, a
     return(cluster_list, all_alternates_dict)
 
 
+# Absolutely too much going on here with the clustering. 
+
+
+# Take network
+# For each island in network:
+#   
+
+def remove_low_authority(G):
+
+    hub_scores = G.hub_score()
+    names = [x['name'] for x in G.vs()]
+    vx_names = G.vs()
+    hub_names = list(zip(names, vx_names, hub_scores))
+
+    high_authority_nodes = [x[0] for x in hub_names if x[2]  > 0.2]
+    high_authority_nodes_vx = [x[1] for x in hub_names if x[2]  > 0.2]
+
+    low_authority_nodes = [x[0] for x in hub_names if x[2]  <= 0.2]
+    low_authority_node_ids = [x[1] for x in hub_names if x[2]  <= 0.2]
+
+    ic("removing low authority_nodes", low_authority_nodes)
+    if len(low_authority_nodes) > 0 and len(high_authority_nodes) > 0:
+        high_authority_edges =  G.es.select(_within = high_authority_nodes_vx)
+        #If not edges left after removing low authority nodes
+        if len(high_authority_edges) > 0:
+
+            G.delete_vertices(low_authority_node_ids)
+        names = [x['name'] for x in G.vs()]
+    return(G)
+
+
+
+def process_island(island, betweenness_cutoff = 0.1, apply_walktrap = True, prev_G = None, clusters = []):
+    if len(island.vs()) < 4:
+        betweenness_cutoff = 1
+
+    island_names = island.vs()['name']
+
+
+    if check_completeness(island_names) == True:
+         clusters = clusters + island_names
+#        return(island_names)  
+  
+    elif len(island_names) <= min_dup(island_names, 1.2) or len(island_names) < 5:
+        island_names, alternates_dict = remove_doubles_by_graph(island_names, island)
+        if check_completeness(island_names):
+               print("new cluster after remove_by_graph", island_names)
+               #return(island_names) 
+               clusters = clusters + island_names
+    else:
+        ################# 
+        # Betweenness
+        new_island = remove_highbetweenness(island, betweenness_cutoff = betweenness_cutoff)
+        new_islands = new_island.clusters(mode = "weak")
+        if len(new_islands.subgraphs()) > 1:
+            clusters = process_network(new_islands, clusters)
+
+        else:
+            new_island_names = new_island.vs()['name']
+            if check_completeness(new_island_names) == True:
+                 clusters = clusters + new_island_names
+            elif len(new_island_names) <= min_dup(new_island_names, 1.2) or len(new_island_names) < 5:
+                 new_island_names, alternates_dict = remove_doubles_by_graph(new_island_names, new_island)
+                 if check_completeness(new_island_names):
+                     
+                     clusters = clusters + new_island_names
+            else:
+               ######################3
+               # Low authority
+               new_new_island = remove_low_authority(new_island)
+               new_new_islands = new_new_islands.clusters(mode = "weak")
+               if len(new_new_islands.subgraphs()) > 1:
+                  new_clusters = process_network(new_new_islands, betweenness_cutoff = betweenness_cutoff)
+                  clusters.append(new_clusters)
+               else:
+                  new_new_island_names = new_new_island.vs()['name']
+                  if check_completeness(new_new_island_names) == True:
+                      clusters = clusters + new_new_island_names
+                  elif len(new_new_island_names) <= min_dup(new_new_island_names, 1.2) or len(new_new_island_names) < 5:
+                     new_new_island_names, alternates_dict = remove_doubles_by_graph(new_new_island_names, new_new_island)
+                     if check_completeness(new_new_island_names):
+                          clusters + clusters + new_island_names
+                  ##########################
+                  # Walktrap   
+                  else:
+                      nnn_islands = new_new_islands.community_walktrap(steps = 3, weights = 'weight').as_clustering()
+                      if len(nnn_islands.subgraphs()) > 1:
+                          clusters = process_network(nnn_islands, clusters, betweenness_cutoff = betweenness_cutoff)
+    return(clusters)
+
+
+# Work-in-progress new main clustering functions to replace first_clustering function
+def process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True, prev_G = None, clusters = []):
+    
+    islands = G.clusters(mode = "weak")
+    for island in islands:
+         clusters = process_island(island, clusters, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap)
+
+    for x in clusters:
+          print(x)
+    return(clusters)
+
+
+    
 
 def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, prev_G = None):
     '''
     Main clustering function, goes back and forth with process_connected_set
     '''
     ic(G.vs()['name'])
+    # Prevent getting stuck 
     if prev_G:
         ic(prev_G.vs()['name'])
         if G.vs()['name'] == prev_G.vs()['name']:
@@ -1255,6 +1364,7 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
         ic("min_dupped at start", min_dupped)
         names = [x['name'] for x in G.vs()]
         ic("names at start", names)
+
         if (len(connected_set) > min_dupped) and apply_walktrap and len(G.vs()) >= 5:
             # First remove weakly linked aa's then try again
             # Walktrap is last resort
@@ -1281,6 +1391,7 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
                 names = [x['name'] for x in G.vs()]
 
                 min_dupped = min_dup(names, 1.2)
+            # If removing low authority nodes made the cluster small enough, continue to process connected set
             if len(names) <= min_dupped:
                 ic("get_new_clustering:new_G", G)
                 processed_cluster, alternates_dict =  process_connected_set(names, G, dup_thresh = 1.2, betweenness_cutoff = betweenness_cutoff)
@@ -1288,10 +1399,11 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
                 if alternates_dict:
                    all_alternates_dict = {**all_alternates_dict, **alternates_dict}
                 new_clusters = new_clusters + processed_cluster
+
+            # Otherwise, try applying walktrap 
             else:
                 ic("applying walktrap")
-                ic("len(connected_set, min_duppled", len(connected_set), min_dupped)
-                print(G)
+                ic("len(connected_set, min_dupped", len(connected_set), min_dupped)
                 clustering = G.community_walktrap(steps = 3, weights = 'weight').as_clustering()
                 for sub_G in clustering.subgraphs():
                      sub_connected_set =  sub_G.vs()['name']
