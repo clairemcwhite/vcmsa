@@ -159,11 +159,11 @@ def make_alignment(cluster_order, seqnums, clustid_to_clust, seqnames):
 
 
 def clusts_from_alignment(alignment):
-   # Pass alignment object around. 
-   # Contains both cluster order and clustid_to_clust info
+   '''
+   Takes an alignment object
+   Converts it to a cluster order and a dictionary of clustid:cluster members
+   '''
    clustid_to_clust = {}
-
-   #align_length = len(alignment[0])
 
    cluster_order = range(0, alignment.width)
    for i in cluster_order:
@@ -178,7 +178,9 @@ def clusts_from_alignment(alignment):
 ###############################
 ####### Sequence utils
 def get_seqs_aas(seqs, seqnums):
-
+    '''
+    Formats sequences as a lists of lists of AAs
+    '''
     seqs_aas = []
     seq_to_length = {}
 
@@ -241,23 +243,24 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
 
  
 def graph_from_cluster_orders(cluster_orders_lol):
-
+    ''' 
+    Take lists of lists of each sequence's path through cluster id
+    Convert to edges in a network
+    '''
+    
     order_edges = []
     for order in cluster_orders_lol:
        for i in range(len(order) - 1):
           edge = (order[i], order[i + 1])
           #if edge not in order_edges:
           order_edges.append(edge)
-
-          #ic(edge)
-    
+ 
     G_order = igraph.Graph.TupleList(edges=order_edges, directed=True)
     return(G_order, order_edges)
 
 def get_topological_sort(cluster_orders_lol):
     cluster_orders_nonempty = [x for x in cluster_orders_lol if len(x) > 0]
     
-
     dag_or_not = graph_from_cluster_orders(cluster_orders_nonempty)[0].simplify().is_dag()
 
     G_order = graph_from_cluster_orders(cluster_orders_nonempty)[0]
@@ -269,9 +272,7 @@ def get_topological_sort(cluster_orders_lol):
     # Note: this is in vertex indices. Need to convert to name to get clustid
     for i in topo_sort_indices:
        cluster_order.append(G_order.vs[i]['name'])
-    return(cluster_order) #, clustid_to_clust_dag)
-
-
+    return(cluster_order) 
 
 
 def remove_order_conflicts(cluster_order, seqs_aas, pos_to_clustid):
@@ -345,6 +346,7 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     cluster_orders_dict = get_cluster_orders(pos_to_clustid, seqs_aas)
 
     # For each cluster that's removed, try adding it back one at a time an alternate conformation
+    # alternates_dict needs to be added to new main clustering function
     clusters_filt_dag_all, clusters_to_add_back = remove_feedback_edges(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
 
     ic("clusters_to_dag", all_alternates_dict)
@@ -443,7 +445,7 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
 
     """
     Remove both improves quality of initial alignment by remove both aas that are found out of order
-    Attempt to add stronger node back
+    Then attempt to add stronger node back
     Function much too long
 
     """
@@ -630,8 +632,8 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
 ######## Amino acid similarity functions
 
 
+# Can be switched to numba
 def reshape_flat(hstates_list):
-
     # Go from (numseqs, seqlen, emb) to (numseqs * seqlen, emb)
     hidden_states = np.reshape(hstates_list, (hstates_list.shape[0]*hstates_list.shape[1], hstates_list.shape[2]))
     return(hidden_states)
@@ -701,13 +703,9 @@ def split_distances_to_sequence(D, I, index_to_aa, numseqs, seqlens):
    ic(index_to_aa)
    query_aa_dict = {}
    for i in range(len(I)):
-      #ic(I[i].shape)
       query_aa = index_to_aa[i]
       # Make dictionary, one per sequence
       target_dict = {}
-      #for seqindex in seqindexes:
-      #    target_dict[seqindex] = []
-
       for k in range(numseqs):
           target_dict[k] = []
           #target_D_dict[k] = []
