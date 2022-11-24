@@ -20,6 +20,7 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 import argparse
 import logging
 
+from time import time
 
 # File IO
 import os
@@ -90,7 +91,7 @@ def get_align_args():
 
 
  
-def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75):
+def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75, pca_plot = False):
 
     aa_embeddings = embedding_dict['aa_embeddings'] # this is numseqs x padded_seqlen x embedding_dim
     padded_seqlen = aa_embeddings.shape[1]
@@ -101,7 +102,6 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
     seqnums = list(range(0, len(seqs)))
     seqs_aas, seq_to_length = get_seqs_aas(seqs, seqnums)
     index_to_aa, hidden_states, seqnum_to_index, batch_list = remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen)
-    pca_plot = True 
     if pca_plot:
        png_hidden_out = "{}/{}.initial.prebatch.png".format(record_dir, outfile_name)
        do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
@@ -331,23 +331,25 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     logging.info("KNN done")
     
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
-    # I2 is a dictionary of dictionaries of each aa1: {aa1:1.0, aa2:0.8}
-
+    # I2 is a dictionary of dictionaries of each aa1: { 1: [[aa1:1.0], [aa2:0.8]}
     logging.info("Split results into proteins done")
 
     logging.info("get best hitlist")
     minscore1 = minscore1
- 
     hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
-    
-    for x in hitlist_all:
-       print("hitlist_all:", x)
-    logging.info("got best hitlist")
+   
+    #for x in hitlist_all:
+    #   print("hitlist_all:", x)
+    #logging.info("got best hitlist")
 
   
-    logging.info("get reciprocal best hits")
-
+    #logging.info("get reciprocal best hits")
+    start = time() 
     rbh_list = get_rbhs(hitlist_all)  
+    end = time()
+    print(end - start)
+
+
     logging.info("got reciprocal best hits")
    
 
@@ -546,8 +548,19 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     return( alignment,  index, hidden_states,  index_to_aa)   
 
 
+def tracefunc(frame, event, arg, indent=[0]):
+    package_name = __name__.split('.')[0]
+
+    if event == "call" and (package_name in str(frame)):
+        indent[0] += 2
+        print("-" * indent[0] + "> call function", frame.f_code.co_name)
+    return tracefunc
 
 if __name__ == '__main__':
+
+    import sys
+    sys.settrace(tracefunc)
+
 
     args = get_align_args()
 
@@ -649,7 +662,7 @@ if __name__ == '__main__':
 
     # The sequences are divided into groups
     ic(seqsim_thresh)
-    cluster_seqnums_list, cluster_seqs_list,  cluster_names_list, cluster_hstates_list, to_exclude = get_seq_groups(seqs ,seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = seqsim_thresh)
+    cluster_seqnums_list, cluster_seqs_list,  cluster_names_list, cluster_hstates_list, to_exclude = get_seq_groups(seqs ,seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = seqsim_thresh, pca_plot = pca_plot )
 
     aln_fasta_list = []
     excluded_records = []

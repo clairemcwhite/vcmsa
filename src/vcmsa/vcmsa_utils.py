@@ -441,6 +441,8 @@ def get_cluster_orders(cluster_dict, seqs_aas):
 
 
 
+
+
 def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_attempt, remove_both = True, alignment_group = 0, attempt = 0, all_alternates_dict = {}, args = None):
 
     """
@@ -727,9 +729,34 @@ def split_distances_to_sequence(D, I, index_to_aa, numseqs, seqlens):
    return(query_aa_dict)
 
 
-def get_besthits(I,  minscore = 0.1 ):
+def get_besthits2(I, minscore = 0.1):
+   hitlist = []
+   for k, v in I.items():
+       for k1, v1 in v.items(): 
+          if len(v1) > 0:
+            if v1[0][1] >= minscore:
+                hitlist.append([k, v1[0][0], v1[0][1]])
+ 
+   #hitlist = [x for x in hitlist if x[2] >= minscore]
+   return(hitlist)
 
-   #aa_to_index = {value: key for key, value in index_to_aa.items()}
+
+
+def get_rbhs2(hitlist):
+   '''
+   get_rhbs using igraph function is faster than this
+   '''
+   rbh_list = []  
+   hitlist_edges_only = [[x[0], x[1]] for x in hitlist]
+
+   for edge in hitlist: 
+       inverse_edge = [edge[1], edge[0]]
+       if inverse_edge in hitlist_edges_only:
+           rbh_list.append(edge) 
+   return(rbh_list)
+
+
+def get_besthits(I,  minscore = 0.1 ): 
 
    hitlist = []
    for aa in I.keys():
@@ -740,12 +767,6 @@ def get_besthits(I,  minscore = 0.1 ):
               besthit = I[aa][targetseq][0]
               besthit_aa = besthit[0] # AA
               besthit_score = besthit[1] #score to query aa
-              # Avoid tie situations
-              # Save ambiguous best hits until later
-              if len(I[aa][targetseq]) > 1:
-                  next_besthit = I[aa][targetseq][1]
-                  next_besthit_aa = next_besthit[0] # AA
-                  next_besthit_score = next_besthit[1] #score to query aa
 
               if besthit_score >= minscore:
                   hitlist.append([aa, besthit_aa, besthit_score])
@@ -1271,7 +1292,6 @@ def process_island(island, betweenness_cutoff = 0.1, apply_walktrap = True, prev
 
     if check_completeness(island_names) == True:
          clusters = clusters + island_names
-#        return(island_names)  
   
     elif len(island_names) <= min_dup(island_names, 1.2) or len(island_names) < 5:
         island_names, alternates_dict = remove_doubles_by_graph(island_names, island)
@@ -1620,6 +1640,7 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
         # Avoid repeats of same rbh calculation
         ic("address_unassigned_aas:scope_aas", scope_aas)
         ic("rbh_dict.keys()", rbh_dict.keys())
+        start = time()
         if True: #not frozenset(scope_aas) in rbh_dict.keys():
             limited_I2 = {}
             # Suspect that this is slow
@@ -1628,11 +1649,16 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
                    limited_I2[key] = I2[key].copy()
             #ic("limited")
             ic("address_unassigned_aas:new_rbh_minscore", minscore)
+
+           
+
             for query_aa in limited_I2.keys():
                  # These keys 
                  for seq in limited_I2[query_aa].keys():
                        limited_I2[query_aa][seq] = [x for x in limited_I2[query_aa][seq] if x[0] in neighbors[query_aa]]
-            ic("limited_I2", limited_I2)
+            #ic("limited_I2", limited_I2)
+            end = time()
+            ic(end - start)
             # Get reciprocal best hits in a limited range
             new_hitlist = get_besthits(limited_I2, minscore)
 
