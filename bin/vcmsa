@@ -313,24 +313,52 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
             png_hidden_out = "{}/{}.alignment_group{}.postbatch.png".format(record_dir, outfile_name, alignment_group)
             do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
-     
-    faiss.normalize_L2(hidden_states)
-    index= build_index_flat(hidden_states, scoretype = "cosinesim", normalize_l2 = False) # Already normalized
-    logging.info("Index built") 
+
+
+
+
+    logging.info("maxlen padding removed")   
+    print("maxlen padding removed")
 
     if pca_plot:
         png_hidden_out = "{}/{}.alignment_group{}.postnorm.png".format(record_dir, outfile_name, alignment_group)
         do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
+    faiss.normalize_L2(hidden_states)
+    print("hidden states normalized")
+
+
+
+    index= build_index_flat(hidden_states, scoretype = "cosinesim", normalize_l2 = False) # Already normalized
+
+    res = faiss.StandardGpuResources()  # use a single GPU
+
+    if torch.cuda.is_available():
+       gpu_index = faiss.index_cpu_to_gpu(res, 0, index)
+
+    print("index built")
+    logging.info("Index built") 
+
 
     # Get KNN of each amino acid
+    start = time()
     D1, I1 =  index.search(hidden_states, k = numseqs*20) 
+    end = time()
+    print("time to search index", end - start)
 
-    
- 
+    start = time()
+    D1, I1 =  gpu_index.search(hidden_states, k = numseqs*20) 
+    end = time()
+    print("time to search index", end - start)
+     
+    print("KNN done") 
     logging.info("KNN done")
+    start = time()
     
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
+    end = time()
+    print("time to split", end-start)
+    print(I2)
     # I2 is a dictionary of dictionaries of each aa1: { 1: [[aa1:1.0], [aa2:0.8]}
     logging.info("Split results into proteins done")
 
