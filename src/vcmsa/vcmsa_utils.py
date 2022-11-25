@@ -159,11 +159,11 @@ def make_alignment(cluster_order, seqnums, clustid_to_clust, seqnames):
 
 
 def clusts_from_alignment(alignment):
-   # Pass alignment object around. 
-   # Contains both cluster order and clustid_to_clust info
+   '''
+   Takes an alignment object
+   Converts it to a cluster order and a dictionary of clustid:cluster members
+   '''
    clustid_to_clust = {}
-
-   #align_length = len(alignment[0])
 
    cluster_order = range(0, alignment.width)
    for i in cluster_order:
@@ -178,7 +178,9 @@ def clusts_from_alignment(alignment):
 ###############################
 ####### Sequence utils
 def get_seqs_aas(seqs, seqnums):
-
+    '''
+    Formats sequences as a lists of lists of AAs
+    '''
     seqs_aas = []
     seq_to_length = {}
 
@@ -241,23 +243,30 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
 
  
 def graph_from_cluster_orders(cluster_orders_lol):
-
+    ''' 
+    Take lists of lists of each sequence's path through cluster id
+    Convert to edges in a network
+    '''
+    
     order_edges = []
     for order in cluster_orders_lol:
        for i in range(len(order) - 1):
           edge = (order[i], order[i + 1])
           #if edge not in order_edges:
           order_edges.append(edge)
-
-          #ic(edge)
-    
+ 
     G_order = igraph.Graph.TupleList(edges=order_edges, directed=True)
+    weights = [1] * len(G_order.es)
+
+    # Remove multiedges and self loops
+    G_order.es['weight'] = weights
+    G_order = G_order.simplify(combine_edges=sum)
+
     return(G_order, order_edges)
 
 def get_topological_sort(cluster_orders_lol):
     cluster_orders_nonempty = [x for x in cluster_orders_lol if len(x) > 0]
     
-
     dag_or_not = graph_from_cluster_orders(cluster_orders_nonempty)[0].simplify().is_dag()
 
     G_order = graph_from_cluster_orders(cluster_orders_nonempty)[0]
@@ -269,9 +278,7 @@ def get_topological_sort(cluster_orders_lol):
     # Note: this is in vertex indices. Need to convert to name to get clustid
     for i in topo_sort_indices:
        cluster_order.append(G_order.vs[i]['name'])
-    return(cluster_order) #, clustid_to_clust_dag)
-
-
+    return(cluster_order) 
 
 
 def remove_order_conflicts(cluster_order, seqs_aas, pos_to_clustid):
@@ -345,43 +352,45 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     cluster_orders_dict = get_cluster_orders(pos_to_clustid, seqs_aas)
 
     # For each cluster that's removed, try adding it back one at a time an alternate conformation
-    clusters_filt_dag_all, clusters_to_add_back = remove_feedback_edges(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
+    # alternates_dict needs to be added to new main clustering function
+    clusters_filt_dag_all = remove_feedback_edges2(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
+    #clusters_filt_dag_all, clusters_to_add_back = remove_feedback_edges(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
 
-    ic("clusters_to_dag", all_alternates_dict)
-    ic("clusters to add back", clusters_to_add_back)
+    #ic("clusters_to_dag", all_alternates_dict)
+    #ic("clusters to add back", clusters_to_add_back)
 
-    already_placed = []
-    for key, cluster_group_to_add_back in clusters_to_add_back.items():
-       skip_first = False
-       skip_second = False
-       ic("looking at cluster group", key, cluster_group_to_add_back)
-         # Meaning that this cluster has already been placed after error correction
-       if list(key)[0] in already_placed:
-             skip_first = True
-             ic(list(key)[0], "already placed")
-       if list(key)[1] in already_placed:
-             skip_second = True
-             ic(list(key)[1], "already placed")
+    #already_placed = []
+    #for key, cluster_group_to_add_back in clusters_to_add_back.items():
+    #   skip_first = False
+    #   skip_second = False
+    #   ic("looking at cluster group", key, cluster_group_to_add_back)
+    #     # Meaning that this cluster has already been placed after error correction
+    #   if list(key)[0] in already_placed:
+    #         skip_first = True
+    #         ic(list(key)[0], "already placed")
+    #   if list(key)[1] in already_placed:
+    #         skip_second = True
+    #         ic(list(key)[1], "already placed")
+    #
+    #   for cluster_pair_to_add_back in cluster_group_to_add_back:
+    #     if skip_first == True:
+    #         cluster_pair_to_add_back = [cluster_pair_to_add_back[1]]
+    #     if skip_second == True:
+    #         cluster_pair_to_add_back = [cluster_pair_to_add_back[0]]
 
-       for cluster_pair_to_add_back in cluster_group_to_add_back:
-         if skip_first == True:
-             cluster_pair_to_add_back = [cluster_pair_to_add_back[1]]
-         if skip_second == True:
-             cluster_pair_to_add_back = [cluster_pair_to_add_back[0]]
+ 
+    #     trial =  clusters_filt_dag_all + cluster_pair_to_add_back
 
-
-         trial =  clusters_filt_dag_all + cluster_pair_to_add_back
-
-         pos_to_clustid, clustid_to_clust = get_cluster_dict(trial)
-         cluster_orders_dict = get_cluster_orders(pos_to_clustid, seqs_aas)
-         clusters_filt_dag_trial, clusters_to_add_back_trial = remove_feedback_edges(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
-         if len(clusters_filt_dag_trial) > len(clusters_filt_dag_all):
-              clusters_filt_dag_all = clusters_filt_dag_trial
-              ic("Alternate worked better")
-              ic("Added back", cluster_pair_to_add_back)
-              already_placed = already_placed + list(flatten(key))
-              ic("Already placed", already_placed)
-              break
+    #     pos_to_clustid, clustid_to_clust = get_cluster_dict(trial)
+    #     cluster_orders_dict = get_cluster_orders(pos_to_clustid, seqs_aas)
+    #     clusters_filt_dag_trial, clusters_to_add_back_trial = remove_feedback_edges2(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
+    #     if len(clusters_filt_dag_trial) > len(clusters_filt_dag_all):
+    #          clusters_filt_dag_all = clusters_filt_dag_trial
+    #          ic("Alternate worked better")
+    #          ic("Added back", cluster_pair_to_add_back)
+    #          already_placed = already_placed + list(flatten(key))
+    #          ic("Already placed", already_placed)
+    #          break
 
     too_small = []
     clusters_filt_dag = []
@@ -438,12 +447,123 @@ def get_cluster_orders(cluster_dict, seqs_aas):
     return(cluster_orders_dict)
 
 
+def save_ordernet(outnet, G_order, fas, clustid_to_clust):
+       with open(outnet, "w") as outfile:
+          outfile.write("c1,c2,aas1,aas2,gidx1,gidx2,weight,feedback\n")
+          for edge in G_order.es():
+             feedback = "no"
+             if edge.index in fas:
+                feedback = "yes"
+             source_name = G_order.vs[edge.source]["name"]
+             target_name = G_order.vs[edge.target]["name"]
+             source_aas = "_".join([str(x) for x in clustid_to_clust[source_name]])
+             target_aas = "_".join([str(x) for x in clustid_to_clust[target_name]])
+             outstring = "{},{},{},{},{},{},{},{}\n".format(source_name, target_name, source_aas, target_aas , edge.source, edge.target, edge['weight'], feedback)
+             outfile.write(outstring)
+
+def remove_feedback_edges2(cluster_orders_dict, clustid_to_clust, gapfilling_attempt, remove_both = True, alignment_group = 0, attempt = 0, all_alternates_dict = {}, args = None):
+    """
+    Remove both improves quality of initial alignment by remove both aas that are found out of order
+    Then attempt to add stronger node back
+
+    """
+    ic(args)
+    record_dir = args.record_dir
+    outfile_name = args.outfile_name
+
+    ic("before feedback_edges")
+    print(clustid_to_clust)
+
+    G_order, order_edges = graph_from_cluster_orders(list(cluster_orders_dict.values()))
+    
+    dag_or_not = G_order.is_dag()
+    print(dag_or_not)
+    cluster_order_lols = list(cluster_orders_dict.values())
+    # The edges to remove to make a directed acyclical graph
+    # Corresponds to "look backs"
+    # With weight, fas, with try to less well connected nodes
+    # Feedback arc sets are edges that point backward in directed graph
+    #start = time()
+    # Very fast
+    fas = G_order.feedback_arc_set(weights = 'weight')
+    #end = time()
+    #ic("FAS TIME", end - start)
+
+    ic("feedback arc set")
+    for x in fas:
+        print("arc", x)
+
+    write_ordernet = True
+    if write_ordernet == True: 
+       
+       outnet = "{}/{}.ordernet_{}_attempt-{}_gapfilling-{:04}.csv".format(record_dir, outfile_name, alignment_group, attempt, gapfilling_attempt)
+       save_ordernet(outnet, G_order, fas, clustid_to_clust)
+
+    to_remove_clustids, to_remove_edges = preserve_stronger_node(G_order, fas)
+
+    cluster_order_lols = [[x for x in sublist if x not in to_remove_clustids] for sublist in cluster_order_lols]   
+    G_order, order_edges = graph_from_cluster_orders(cluster_order_lols)
+    
+    dag_or_not = G_order.is_dag()
+    print(dag_or_not) 
+
+    ic("removed clusters", to_remove_clustids)
+
+    reduced_clusters = []
+    for clustid, clust in clustid_to_clust.items():
+          #new_clust = []
+          #if clustid in removed_clustids:
+                #ic("Can remove", clustid, clust)
+                #for aa in clust:
+                #    if aa in all_alternates_dict.keys():
+                #        ic("Alternate found for AA ",aa, all_alternates_dict[aa])
+                #         # ADD list of lists of both clustids in edge to try with alternates
+          if not clustid in to_remove_clustids:
+              reduced_clusters.append(clust)
+          #else:
+          #    too_small_clusters.append(new_clust)
+
+    return(reduced_clusters)
+
+
+def preserve_stronger_node(G_order, fas): 
+    to_remove = []
+    removed_edges = []
+    removed_clustids = []
+
+    for feedback_arc in fas:
+       edge = G_order.es()[feedback_arc]
+       source_name = G_order.vs[edge.source]["name"]
+       target_name = G_order.vs[edge.target]["name"]
+
+       #ic("Feedback edge {}, index {}, edge.source {} edge.target {} source_name {}, target_name {}" .format(edge, edge.index, edge.source, edge.target, source_name, target_name))
+       # If one node in the feedback edges is significantly stronger (i.e. more incumbent edges"
+       strength_source =  G_order.strength(edge.source, weights = "weight")
+       strength_target =  G_order.strength(edge.target, weights = "weight")
+       #print("STRENGTH source",  source_name, strength_source)
+       #print("STRENGTH target", target_name, strength_target)
+       if strength_source >= 1.5 * strength_target:
+             #print("keeping ", source_name)
+             removed_clustids.append(target_name)
+             removed_edges.append((None, edge.target, None, target_name))
+       elif strength_target >= 1.5 * strength_source:
+             #print("keeping ", target_name)
+             removed_clustids.append(source_name)
+             removed_edges.append((edge.source, None , source_name, None))
+
+       else:
+           removed_edges.append((edge.source, edge.target, source_name, target_name))
+           removed_clustids.append(source_name)
+           removed_clustids.append(target_name)
+       
+    return(removed_clustids, removed_edges)
+
 
 def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_attempt, remove_both = True, alignment_group = 0, attempt = 0, all_alternates_dict = {}, args = None):
 
     """
     Remove both improves quality of initial alignment by remove both aas that are found out of order
-    Attempt to add stronger node back
+    Then attempt to add stronger node back
     Function much too long
 
     """
@@ -471,8 +591,12 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
     # Corresponds to "look backs"
     # With weight, fas, with try to remove lighter edges
     # Feedback arc sets are edges that point backward in directed graph
-
+    start = time()
     fas = G_order.feedback_arc_set(weights = 'weight')
+    end = time()
+    ic("FAS TIME", end - start)
+
+    #fas = G_order.feedback_arc_set(weights = 'weight')
 
 
     ic("feedback arc set")
@@ -502,6 +626,10 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
     to_remove = []
     removed_edges = []
     removed_clustids = []
+
+
+
+
     for feedback_arc in fas:
        edge = G_order.es()[feedback_arc]
        source_name = G_order.vs[edge.source]["name"]
@@ -516,19 +644,21 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
        if strength_source >= 2* strength_target:
              print("keeping ", source_name)
              removed_clustids.append(target_name)
+             removed_edges.append((None, edge.target, None, target_name))
        elif strength_target >= 2* strength_source:
              print("keeping ", target_name)
              removed_clustids.append(source_name)
+             removed_edges.append((edge.source, None , source_name, None))
 
        else:
            removed_edges.append((edge.source, edge.target, source_name, target_name))
-
+    return(0)
     # Delete feed back arc edges
     G_order.delete_edges(fas)
 
     # Check if graph is still dag if edge is added back.
     # If so, keep it
-
+    # Operations on edges are confusing
     for removed_edge in removed_edges:
          ic("try to return", removed_edge[2:])
          G_order.add_edges(  [removed_edge[0:2]]) # vertex id pairs 
@@ -629,9 +759,8 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
 ########################################
 ######## Amino acid similarity functions
 
-
+# Can be switched to numba
 def reshape_flat(hstates_list):
-
     # Go from (numseqs, seqlen, emb) to (numseqs * seqlen, emb)
     hidden_states = np.reshape(hstates_list, (hstates_list.shape[0]*hstates_list.shape[1], hstates_list.shape[2]))
     return(hidden_states)
@@ -653,16 +782,18 @@ def do_batch_correct(hidden_states, levels, batch_list):
 
 
 def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
+    # Can be 25s for 30 ~600 long sequences
+    # See timings on this step
     # Initial index to remove maxlen padding from input embeddings
+    print("Start remove_maxlen_padding")
     index_to_aa = {}
     aa_indices = []
-    ic(seqs_aas)
     seqlens = [len(x) for x in seqs_aas]
     for i in range(len(seqs_aas)):
         for j in range(padded_seqlen):
            if j >= seqlens[i]:
              continue
-           print(i, j)
+           #print(i, j)
            aa = seqs_aas[i][j]
            index_num = i * padded_seqlen + j
            index_to_aa[index_num] = aa
@@ -679,6 +810,7 @@ def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
     count_index = 0
     batch_list = []
     seqnum_to_index = {}
+    
     for i in range(len(seqs_aas)):
        seqnum_to_index[i] = []
        for j in range(0, seqlens[i]):
@@ -690,48 +822,60 @@ def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
            index_to_aa[count_index] = aa
            count_index = count_index + 1
 
-    logging.info("Build index of amino acid embeddings")
-    ic(batch_list)
-
+    print("End maxlen padding")
     return(index_to_aa, hidden_states, seqnum_to_index, batch_list)
+
 
 
 def split_distances_to_sequence(D, I, index_to_aa, numseqs, seqlens):
 
-   ic(index_to_aa)
    query_aa_dict = {}
    for i in range(len(I)):
-      #ic(I[i].shape)
       query_aa = index_to_aa[i]
       # Make dictionary, one per sequence
-      target_dict = {}
-      #for seqindex in seqindexes:
-      #    target_dict[seqindex] = []
-
-      for k in range(numseqs):
+      target_dict = {} 
+      for k in range(numseqs): # Check that this indexing is right (by numseq instead of seqnums)
           target_dict[k] = []
-          #target_D_dict[k] = []
-
-      #ic(query_aa, i, D[i]) 
-      #ic(query_aa, i, I[i]) 
       for j in range(len(I[i])):
            try:
               target_aa = index_to_aa[I[i][j]]
            except Exception as E:
-               #ic("no aa at",  I[i][j])               
                continue
            seqindex = target_aa.seqindex
            target_dict[seqindex].append([target_aa, D[i][j]])
-           #ic("repeated", query_aa, target_aa,i,j, D[i][j])
 
       query_aa_dict[query_aa] = target_dict
-      #query_aa_D_dict[query_aa] = target_D_dict
    return(query_aa_dict)
 
 
-def get_besthits(I,  minscore = 0.1 ):
+def get_besthits2(I, minscore = 0.1):
+   hitlist = []
+   for k, v in I.items():
+       for k1, v1 in v.items(): 
+          if len(v1) > 0:
+            if v1[0][1] >= minscore:
+                hitlist.append([k, v1[0][0], v1[0][1]])
+ 
+   #hitlist = [x for x in hitlist if x[2] >= minscore]
+   return(hitlist)
 
-   #aa_to_index = {value: key for key, value in index_to_aa.items()}
+
+
+def get_rbhs2(hitlist):
+   '''
+   get_rhbs using igraph function is faster than this
+   '''
+   rbh_list = []  
+   hitlist_edges_only = [[x[0], x[1]] for x in hitlist]
+
+   for edge in hitlist: 
+       inverse_edge = [edge[1], edge[0]]
+       if inverse_edge in hitlist_edges_only:
+           rbh_list.append(edge) 
+   return(rbh_list)
+
+
+def get_besthits(I,  minscore = 0.1 ): 
 
    hitlist = []
    for aa in I.keys():
@@ -742,12 +886,6 @@ def get_besthits(I,  minscore = 0.1 ):
               besthit = I[aa][targetseq][0]
               besthit_aa = besthit[0] # AA
               besthit_score = besthit[1] #score to query aa
-              # Avoid tie situations
-              # Save ambiguous best hits until later
-              if len(I[aa][targetseq]) > 1:
-                  next_besthit = I[aa][targetseq][1]
-                  next_besthit_aa = next_besthit[0] # AA
-                  next_besthit_score = next_besthit[1] #score to query aa
 
               if besthit_score >= minscore:
                   hitlist.append([aa, besthit_aa, besthit_score])
@@ -1273,7 +1411,6 @@ def process_island(island, betweenness_cutoff = 0.1, apply_walktrap = True, prev
 
     if check_completeness(island_names) == True:
          clusters = clusters + island_names
-#        return(island_names)  
   
     elif len(island_names) <= min_dup(island_names, 1.2) or len(island_names) < 5:
         island_names, alternates_dict = remove_doubles_by_graph(island_names, island)
@@ -1622,6 +1759,7 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
         # Avoid repeats of same rbh calculation
         ic("address_unassigned_aas:scope_aas", scope_aas)
         ic("rbh_dict.keys()", rbh_dict.keys())
+        start = time()
         if True: #not frozenset(scope_aas) in rbh_dict.keys():
             limited_I2 = {}
             # Suspect that this is slow
@@ -1630,11 +1768,16 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
                    limited_I2[key] = I2[key].copy()
             #ic("limited")
             ic("address_unassigned_aas:new_rbh_minscore", minscore)
+
+           
+
             for query_aa in limited_I2.keys():
                  # These keys 
                  for seq in limited_I2[query_aa].keys():
                        limited_I2[query_aa][seq] = [x for x in limited_I2[query_aa][seq] if x[0] in neighbors[query_aa]]
-            ic("limited_I2", limited_I2)
+            #ic("limited_I2", limited_I2)
+            end = time()
+            ic(end - start)
             # Get reciprocal best hits in a limited range
             new_hitlist = get_besthits(limited_I2, minscore)
 
