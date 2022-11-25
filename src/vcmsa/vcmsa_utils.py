@@ -759,7 +759,6 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
 ########################################
 ######## Amino acid similarity functions
 
-
 # Can be switched to numba
 def reshape_flat(hstates_list):
     # Go from (numseqs, seqlen, emb) to (numseqs * seqlen, emb)
@@ -783,8 +782,10 @@ def do_batch_correct(hidden_states, levels, batch_list):
 
 
 def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
+    # Can be 25s for 30 ~600 long sequences
     # See timings on this step
     # Initial index to remove maxlen padding from input embeddings
+    print("Start remove_maxlen_padding")
     index_to_aa = {}
     aa_indices = []
     seqlens = [len(x) for x in seqs_aas]
@@ -821,8 +822,7 @@ def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
            index_to_aa[count_index] = aa
            count_index = count_index + 1
 
-    logging.info("Build index of amino acid embeddings")
-
+    print("End maxlen padding")
     return(index_to_aa, hidden_states, seqnum_to_index, batch_list)
 
 

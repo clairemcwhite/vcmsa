@@ -334,31 +334,32 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     res = faiss.StandardGpuResources()  # use a single GPU
 
     if torch.cuda.is_available():
-       gpu_index = faiss.index_cpu_to_gpu(res, 0, index)
+       index = faiss.index_cpu_to_gpu(res, 0, index)
+    else:
+       print("KNN search significantly faster on a GPU")
 
     print("index built")
     logging.info("Index built") 
 
-
-    # Get KNN of each amino acid
     start = time()
     D1, I1 =  index.search(hidden_states, k = numseqs*20) 
     end = time()
     print("time to search index", end - start)
+    # Get KNN of each amino acid
+    #start = time()
+    #D1, I1 =  index.search(hidden_states, k = numseqs*20) 
+    #end = time()
+    #print("time to search index", end - start)
 
-    start = time()
-    D1, I1 =  gpu_index.search(hidden_states, k = numseqs*20) 
-    end = time()
-    print("time to search index", end - start)
      
     print("KNN done") 
     logging.info("KNN done")
     start = time()
-    
+    # Quite slow 
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
     end = time()
     print("time to split", end-start)
-    print(I2)
+    #print(I2)
     # I2 is a dictionary of dictionaries of each aa1: { 1: [[aa1:1.0], [aa2:0.8]}
     logging.info("Split results into proteins done")
 
