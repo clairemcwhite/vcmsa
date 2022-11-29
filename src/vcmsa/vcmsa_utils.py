@@ -644,15 +644,15 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
        if strength_source >= 2* strength_target:
              print("keeping ", source_name)
              removed_clustids.append(target_name)
-             removed_edges.append((None, edge.target, None, target_name))
+             #removed_edges.append((None, edge.target, None, target_name))
        elif strength_target >= 2* strength_source:
              print("keeping ", target_name)
              removed_clustids.append(source_name)
-             removed_edges.append((edge.source, None , source_name, None))
+             #removed_edges.append((edge.source, None , source_name, None))
 
        else:
            removed_edges.append((edge.source, edge.target, source_name, target_name))
-    return(0)
+    #return(0)
     # Delete feed back arc edges
     G_order.delete_edges(fas)
 
@@ -1217,6 +1217,10 @@ def get_looser_scores(aa, index, hidden_states):
      hidden_state_aa = np.take(hidden_states, [aa.index], axis = 0)
      # Search the total number of amino acids
      n_aa = hidden_states.shape[0]
+
+     # Faiss k limited to 2048
+     if n_aa > 2048:
+        n_aa = 2048
      D_aa, I_aa =  index.search(hidden_state_aa, k = n_aa)
      return(list(zip(D_aa.tolist()[0], I_aa.tolist()[0])))
 
@@ -1234,7 +1238,10 @@ def get_particular_score(D, I, aa1, aa2):
 
 def get_set_of_scores(gap_aa, index, hidden_states, index_to_aa):
 
+    start = time()
     candidates = get_looser_scores(gap_aa, index, hidden_states)
+    end = time()
+    print("search time", end-start)
     candidates_aa = []
     for score in candidates:
         try:
@@ -1243,6 +1250,7 @@ def get_set_of_scores(gap_aa, index, hidden_states, index_to_aa):
            # Not all indices correspond to an aa.
            continue
         candidates_aa.append([target_aa, score[0]])
+    
     return(candidates_aa)
 
 
@@ -1638,7 +1646,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     edgelist = []
     ic("fill_in_unassigned_w_clustering:unassigned", unassigned)
     for gap in unassigned:
-        ic("fill_in_unassigned_w_clustering", gap)
+        print("fill_in_unassigned_w_clustering", gap)
         gap_edgelist = get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)
         edgelist = edgelist + gap_edgelist
         #ic("gap_edgelist", gap_edgelist)
@@ -1834,7 +1842,7 @@ def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_
 
         starting_clustid =  gap[0]
         ending_clustid = gap[2]
-        ic(gap)
+        print(gap)
         if starting_clustid in clustid_to_clust.keys():
               # If before start of clusts, will be -1
               starting_clust =  clustid_to_clust[starting_clustid]
@@ -1933,13 +1941,14 @@ def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,
          candidate_aas =  clustid_to_clust[cand]
          incluster_scores = [x for x in candidates_w_score if x[0] in candidate_aas]
          ic("incluster scores", incluster_scores)
-         total_incluster_score = sum([x[1] for x in incluster_scores]) / len(incluster_scores) # Take the mean score within the cluster. Or median?
-         ic("total_inclucster", total_incluster_score)
-         if total_incluster_score > current_best_score:
-            if total_incluster_score > 0.5: # Bad matches being added (ex. 0.3)
-              current_best_score = total_incluster_score
-              current_best_match = cand
-              match_found = True
+         if incluster_scores:
+             total_incluster_score = sum([x[1] for x in incluster_scores]) / len(incluster_scores) # Take the mean score within the cluster. Or median?
+             ic("total_inclucster", total_incluster_score)
+             if total_incluster_score > current_best_score:
+                if total_incluster_score > 0.5: # Bad matches being added (ex. 0.3)
+                  current_best_score = total_incluster_score
+                  current_best_match = cand
+                  match_found = True
 
 
     if match_found:
