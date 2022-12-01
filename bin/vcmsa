@@ -482,8 +482,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
             alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
             return(alignment, index, hidden_states, index_to_aa)
 
-        if ( unassigned == history_unassigned['threebefore'] or  unassigned == history_unassigned['twobefore'] ) and gapfilling_attempt > 10:
-            if minscore > 0.1:
+        if ( gapfilling_attempt == max_iterations or unassigned == history_unassigned['threebefore'] or  unassigned == history_unassigned['twobefore'] ) and gapfilling_attempt > 10:
+            if minscore > 0.1 and gapfilling_attempt != max_iterations:
                 minscore = 0.1
                 ic("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
             ################ Final stage #############3
