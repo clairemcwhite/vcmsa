@@ -12,7 +12,7 @@ from vcmsa.vcmsa_utils import *
 
 # Printing for debugging with icecream
 try:
-    from icecream import ic
+    from icecream2 import ic
     ic.configureOutput(includeContext=True, outputFunction=print) # Prints line number and function
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
@@ -27,7 +27,15 @@ import os
 import shutil
 import sys
 
+import line_profiler
+import atexit
+profile = line_profiler.LineProfiler()
+#builtins.__dict__['profile'] = prof
 
+#atexit.register(profile.ic_stats)
+
+
+@profile
 def get_align_args():
 
     parser = argparse.ArgumentParser()
@@ -91,6 +99,7 @@ def get_align_args():
 
 
  
+@profile
 def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75, pca_plot = False):
 
     aa_embeddings = embedding_dict['aa_embeddings'] # this is numseqs x padded_seqlen x embedding_dim
@@ -147,8 +156,8 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
         
 
     
-        ic("GG", G.vs()['name'])
-        ic("GG", G.es()['weight'])
+        #ic("GG", G.vs()['name'])
+        #ic("GG", G.es()['weight'])
         edgelist = []
         weightlist = []
         for edge in G.es():
@@ -163,50 +172,73 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
  
                              length_diff_correction = 1 - abs(0.5 - len(seqs[source]) / (len(seqs[source]) + len(seqs[target])))
                              corrected_weight = edge['weight'] * length_diff_correction
-                             print("seqsim: ", source,target, edge['weight'], "l1, l2", len(seqs[source]), len(seqs[target]), corrected_weight)
+                             #print("seqsim: ", source,target, edge['weight'], "l1, l2", len(seqs[source]), len(seqs[target]), corrected_weight)
                              if corrected_weight >= seqsim_thresh:
                              
                                  edgelist.append([ source, target ])
                                  weightlist.append(corrected_weight)
+                             #else:
+                             #    edgelist.append([ source, target ])
+                             #    weightlist.append(0.0000001) # Because walktrap will fail on disconnected graphs until release of 0.10.3
+                             #    print("adding", source, target)
         # Rebuild G
         G = igraph.Graph.TupleList(edges=edgelist, directed=False)
         G.es['weight'] = weightlist
 
         G = G.simplify(combine_edges=max)
-        ic("G", G)
+        print(G)
+        islands = G.clusters(mode = "weak")
+        for island in islands:
+             print("island", island) 
+        first_members = [x[0] for x in islands]
+        # Artificially connect islands to avoid igraph error
+        print(first_members)
+        for x in first_members:
+           for y in first_members:
+              if x == y:
+                continue
+              else:
+                G.add_edge(x, y, weight = 0.0000001)
+        islands = G.clusters(mode = "weak")
+        for island in islands:
+             print("island", island) 
+        #ic("G", G)
+        
+        #if exclude == True:
+
 
         seq_clusters = G.community_walktrap(steps = 3, weights = 'weight').as_clustering() 
         if len(seq_clusters.subgraphs()) == len(G.vs()):
              seq_clusters = G.clusters(mode = "weak") # walktrap can cluster nodes individually. See UBQ
 
-        ic("After walktrap", seq_clusters)
+        #ic("After walktrap", seq_clusters)
         for seq_cluster_G in seq_clusters.subgraphs():
         
                 # Do exclusion within clusters
-                ic("seq_clusters", seq_cluster_G)
+                #ic("seq_clusters", seq_cluster_G)
                 if exclude == True:
     
                     clust_names = seq_cluster_G.vs()["name"]
-                    ic("clust_names", clust_names)
+                    #ic("clust_names", clust_names)
                     cluster_to_exclude = candidate_to_remove(seq_cluster_G, clust_names, z = -5)
-                    ic(cluster_to_exclude)
+                    #ic(cluster_to_exclude)
                        
                     to_delete_ids_sub_G = [v.index for v in seq_cluster_G.vs if v['name'] in cluster_to_exclude]
                     seq_cluster_G.delete_vertices(to_delete_ids_sub_G) 
     
     
-                    ic("to_exclude_pre", to_exclude)
+                    #ic("to_exclude_pre", to_exclude)
                     to_exclude = to_exclude + cluster_to_exclude
                     to_exclude = list(set(to_exclude))
-                    ic("to_exclude_post", to_exclude)
+                    #ic("to_exclude_post", to_exclude)
                     if to_exclude:       
                         logging.info("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
-                        ic("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
+                        #ic("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
     
                 hstates = []
                 seq_cluster = seq_cluster_G.vs()['name']
                 seq_cluster.sort()
-                ic(seq_cluster)
+                #ic(seq_cluster)
                 cluster_seqnums_list.append(seq_cluster)
         
                 filter_indices = seq_cluster
@@ -219,7 +251,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
                 cluster_seq = [seqs[i] for i in filter_indices]
                 cluster_seqs_list.append(cluster_seq)
                 to_exclude = list(set(to_exclude))
-        ic("eq check", to_exclude, prev_to_exclude)
+        #ic("eq check", to_exclude, prev_to_exclude)
         if set(to_exclude) == set(prev_to_exclude):
            repeat = False
         else:
@@ -231,7 +263,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
          if exclude == True:
             clust_names = G.vs()["name"] 
             to_exclude = candidate_to_remove(G, clust_names, z = -3)
-            ic('name', to_exclude)
+            #ic('name', to_exclude)
             to_delete_ids = [v.index for v in G.vs if v['name'] in to_exclude]
             #ic('vertix_id', to_delete_ids)
             G.delete_vertices(to_delete_ids) 
@@ -245,7 +277,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
  
         # #ic([v['name'] for v in G.vs])
          cluster_seqnums_list =  [v['name'] for v in G.vs]
-         ic(cluster_seqnums_list, to_exclude)
+         #ic(cluster_seqnums_list, to_exclude)
          cluster_seqnums_list = list(set(cluster_seqnums_list))
          cluster_seqnums_list.sort()
          # Make sure this is removing to_exclude corectly
@@ -255,19 +287,20 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
          cluster_seqnums_list = [cluster_seqnums_list] 
          to_exclude = list(set(to_exclude))
 
-    ic("seqnum clusters", cluster_seqnums_list)
-    ic(cluster_names_list)
+    #ic("seqnum clusters", cluster_seqnums_list)
+    #ic(cluster_names_list)
     # Anything lost in the processes
 
-    ic("cluster_seqnums_list", cluster_seqnums_list) 
+    #ic("cluster_seqnums_list", cluster_seqnums_list) 
     dropped_seqs = [ x for x in list(range(0,len(seqs))) if x not in flatten(cluster_seqnums_list)]
-    ic("Dropped seqs:", dropped_seqs)
+    #ic("Dropped seqs:", dropped_seqs)
     to_exclude = list(set(to_exclude + dropped_seqs))    
-    ic("final to exclude", to_exclude)
+    #ic("final to exclude", to_exclude)
 
     return(cluster_seqnums_list, cluster_seqs_list,  cluster_names_list, group_hstates_list, to_exclude)
 
 
+@profile
 def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, alignment_group = 0, args = None):
     """
     Required args: record_dir, outfile_name, do_pca, headnorm
@@ -279,15 +312,15 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     outfile_name = args.outfile_name
     batch_correct = args.batch_correct
     seqlens = [len(x) for x in seqs]
-    ic("seqs", seqs, seqlens)
+    #ic("seqs", seqs, seqlens)
     max_iterations = args.max_iterations # default 100
     cpu_only = args.cpu_only 
     numseqs = len(seqs)
     padded_seqlen = hstates_list.shape[1]
     embedding_length = hstates_list.shape[2]
-    ic("numseqs", numseqs)
-    ic("padded_seqlen", padded_seqlen)
-    ic(hstates_list.shape)
+    #ic("numseqs", numseqs)
+    #ic("padded_seqlen", padded_seqlen)
+    #ic(hstates_list.shape)
 
 
     logging.info("Flattening hidden states list")
@@ -306,7 +339,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
 
     if batch_correct:
-        ic( list(range(len(seqs_aas)))) 
+        #ic( list(range(len(seqs_aas)))) 
         hidden_states = do_batch_correct(hidden_states, list(range(len(seqs_aas))), batch_list)
        
         if pca_plot:
@@ -318,33 +351,34 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
 
     logging.info("maxlen padding removed")   
-    print("maxlen padding removed")
+    #print("maxlen padding removed")
 
     if pca_plot:
         png_hidden_out = "{}/{}.alignment_group{}.postnorm.png".format(record_dir, outfile_name, alignment_group)
         do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
     faiss.normalize_L2(hidden_states)
-    print("hidden states normalized")
+    #print("hidden states normalized")
 
 
 
     index= build_index_flat(hidden_states, scoretype = "cosinesim", normalize_l2 = False) # Already normalized
 
     res = faiss.StandardGpuResources()  # use a single GPU
+    #print("Cuda available?", torch.cuda.is_available())
 
     if torch.cuda.is_available():
        index = faiss.index_cpu_to_gpu(res, 0, index)
     else:
        print("KNN search significantly faster on a GPU")
 
-    print("index built")
+    #print("index built")
     logging.info("Index built") 
 
     start = time()
     D1, I1 =  index.search(hidden_states, k = numseqs*20) 
     end = time()
-    print("time to search index", end - start)
+    #print("time to search index", end - start)
     # Get KNN of each amino acid
     #start = time()
     #D1, I1 =  index.search(hidden_states, k = numseqs*20) 
@@ -352,13 +386,13 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     #print("time to search index", end - start)
 
      
-    print("KNN done") 
+    #print("KNN done") 
     logging.info("KNN done")
     start = time()
     # Quite slow 
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
     end = time()
-    print("time to split", end-start)
+    #print("time to split", end-start)
     #print(I2)
     # I2 is a dictionary of dictionaries of each aa1: { 1: [[aa1:1.0], [aa2:0.8]}
     logging.info("Split results into proteins done")
@@ -368,7 +402,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
    
     #for x in hitlist_all:
-    #   print("hitlist_all:", x)
+    #   #print("hitlist_all:", x)
     #logging.info("got best hitlist")
 
   
@@ -376,15 +410,22 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     start = time() 
     rbh_list = get_rbhs(hitlist_all)  
     end = time()
-    print(end - start)
+    #print(end - start)
 
 
     logging.info("got reciprocal best hits")
    
 
-    for x in rbh_list:
-      print("rbh", x) 
-   
+    #for x in rbh_list:
+      #print("rbh", x) 
+
+    #print("old_len", len( rbh_list))
+    #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
+    rbh_list = maximum_increasing(rbh_list)
+    #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
+    #print("new_len", len(rbh_list))
+    
+
     outnet = "{}/{}.testnet_initial_clustering{}.csv".format(record_dir, outfile_name, alignment_group)
     with open(outnet, "w") as outfile:
           outfile.write("aa1,aa2,score\n")
@@ -393,7 +434,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
              outfile.write(outstring)
 
 
-    ic("Start betweenness calculation to filter cluster-connecting amino acids. Also first round clustering")
+    #ic("Start betweenness calculation to filter cluster-connecting amino acids. Also first round clustering")
 
     G = graph_from_rbh(rbh_list, directed = False)
  
@@ -402,24 +443,27 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     if len(seqs) > 2:
         minclustsize = int(len(seqs)/2) + 1
         #if len(clusters_list) == 0:
+        #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
+        #if len(clusters_list) == 0:
         clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 0.1, ignore_betweenness = False, apply_walktrap = True)
         #clusters_list = process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True)
 
     else:
         minclustsize = 2
+        #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
         clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 1, ignore_betweenness = True, apply_walktrap = True)
 
        
     clusters_list = [x for x in clusters_list if len(x) > 1]
-    for x in clusters_list:
-        ic("First clusters", x)
+    #for x in clusters_list:
+        #print("First clusters", x)
 
     # Why is dedup_clusters only used once? 
     new_clusters_list = dedup_clusters(clusters_list, G, minclustsize)
 
-    for x in new_clusters_list:
-      ic("Deduplicated first clusters", x)
+    #for x in new_clusters_list:
+      #print("Deduplicated first clusters", x)
 
 
     clusters_filt = []
@@ -431,17 +475,17 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
              # This is ever happening?
              if len(clust) > 2:
                 too_small.append(clust)
-    for x in clusters_filt:
-          ic("First clusters with small removed", x)
-    for x in too_small:
-          ic("collected as too_small", x)
-    ic("Getting DAG of cluster orders, removing feedback loops")
+    #for x in clusters_filt:
+          #ic("First clusters with small removed", x)
+    #for x in too_small:
+          #ic("collected as too_small", x)
+    #ic("Getting DAG of cluster orders, removing feedback loops")
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_filt, seqs_aas, gapfilling_attempt = 0, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seq_names, args = args)
 
     clusters_filt = list(clustid_to_clust.values())  
 
-    for x in clusters_filt:
-          ic("First clusters after feedback loop removal", x)
+    #for x in clusters_filt:
+          #ic("First clusters after feedback loop removal", x)
     alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
 
     if len(seqnums) > 2:
@@ -456,7 +500,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     minscore = 0.5
     betweenness_cutoff = 0.30
     history_unassigned = {'onebefore':[], 'twobefore':[], 'threebefore':[]}
-    print(alignment)
+    #print(alignment)
     most_complete_alignment = alignment
     too_small = [] 
     rbh_dict = {}
@@ -466,18 +510,18 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     ############## CONTROL LOOP ###################
     for gapfilling_attempt in range(0, max_iterations):
         gapfilling_attempt = gapfilling_attempt + 1
-        print("Align this is gapfilling attempt ", gapfilling_attempt)
+        #print("Align this is gapfilling attempt ", gapfilling_attempt)
         logging.info("gapfilling_attempt {}".format(gapfilling_attempt))
         if gapfilling_attempt > 6 and minclustsize > 2 and gapfilling_attempt % 2 == 1:
                 minclustsize = minclustsize - 1
-        ic("This is the minclustsize", minclustsize)
+        #ic("This is the minclustsize", minclustsize)
          
         unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid, too_small)
-        for x in unassigned:
-           ic("unassign", x)
+        #for x in unassigned:
+           #ic("unassign", x)
 
         if len(unassigned) == 0:
-            ic("Alignment complete after gapfilling attempt {}".format(gapfilling_attempt - 1))
+            #ic("Alignment complete after gapfilling attempt {}".format(gapfilling_attempt - 1))
      
             alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
             return(alignment, index, hidden_states, index_to_aa)
@@ -485,20 +529,20 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         if ( gapfilling_attempt == max_iterations or unassigned == history_unassigned['threebefore'] or  unassigned == history_unassigned['twobefore'] ) and gapfilling_attempt > 10:
             if minscore > 0.1 and gapfilling_attempt != max_iterations:
                 minscore = 0.1
-                ic("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
+                #ic("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
             ################ Final stage #############3
             else: 
                 alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
-                ic("current {}, previous record {}".format(alignment.numassigned,most_complete_alignment.numassigned))
+                #ic("current {}, previous record {}".format(alignment.numassigned,most_complete_alignment.numassigned))
                 if alignment.numassigned < most_complete_alignment.numassigned:
-                    ic("Replacing current alignment with previous more complete alignment")
+                    #ic("Replacing current alignment with previous more complete alignment")
                     alignment = most_complete_alignment
                 else:
                     ic("Currently alignment is the most complete so far")
-                ic("Align by placing remaining amino acids")
+                #ic("Align by placing remaining amino acids")
                 cluster_order, clustid_to_clust, pos_to_clustid, alignment = fill_in_hopeless(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states, gapfilling_attempt, args = args)
                 unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
-                ic('This unassigned should be empty', unassigned)
+                #ic('This unassigned should be empty', unassigned)
                 alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
 
                 return(alignment,   index, hidden_states, index_to_aa)
@@ -512,7 +556,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         # Do one or two rounds of clustering between guideposts
         if gapfilling_attempt in list(range(1, max_iterations, 2)):#  or gapfilling_attempt in [1, 2, 3, 4]:
 
-            ic("Align by clustering within guideposts")
+            #ic("Align by clustering within guideposts")
             # Don't allow modification of previous guideposts
             if gapfilling_attempt > 4:
                  apply_walktrap = True
@@ -540,15 +584,15 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
 
  
-            for x in too_small:
-               ic("collected as too_small after clustering", x)        
+            #for x in too_small:
+               #ic("collected as too_small after clustering", x)        
 
-            for key,value in clustid_to_clust.items():
-                 ic(key, value)
+            #for key,value in clustid_to_clust.items():
+                 #ic(key, value)
 
         else:
             
-            ic("Align by best match (looser)")
+            #ic("Align by best match (looser)")
             logging.info("Add aa's to existing clusters")
             if gapfilling_attempt > 3:
               if gapfilling_attempt < 15: 
@@ -565,7 +609,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
         # THINGS TO DO AT THE END OF GAPFILLING CYCLE
         if alignment.numassigned > most_complete_alignment.numassigned:
-            ic("This is the most complete alignment so far")
+            #ic("This is the most complete alignment so far")
             most_complete_alignment = alignment
    
         outaln = "{}/{}.alignment_clustering_group_{}_gapfilling_{:04}.aln".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
@@ -577,12 +621,13 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     return( alignment,  index, hidden_states,  index_to_aa)   
 
 
+@profile
 def tracefunc(frame, event, arg, indent=[0]):
     package_name = __name__.split('.')[0]
 
     if event == "call" and (package_name in str(frame)):
         indent[0] += 2
-        print("-" * indent[0] + "> call function", frame.f_code.co_name)
+        #print("-" * indent[0] + "> call function", frame.f_code.co_name)
     return tracefunc
 
 if __name__ == '__main__':
@@ -593,7 +638,7 @@ if __name__ == '__main__':
 
     args = get_align_args()
 
-    print("args", args)
+    #print("args", args)
     fasta_path = args.fasta_path
     embedding_path = args.embedding_path
     outfile = args.out_path
@@ -628,7 +673,7 @@ if __name__ == '__main__':
     args.outfile_name  = outfile_name
     args.record_dir = record_dir
 
-    print("Params", args)
+    #print("Params", args)
     logname = "{}/{}.align.log".format(record_dir, outfile_name)
     log_format = "%(asctime)s::%(levelname)s::"\
              "%(filename)s::%(lineno)d::%(message)s"
@@ -639,10 +684,10 @@ if __name__ == '__main__':
     if heads is not None:
        with open(heads, "r") as f:
          headnames = f.readlines()
-         ic(headnames)
+         #ic(headnames)
          headnames = [x.replace("\n", "") for x in headnames]
 
-         ic(headnames)
+         #ic(headnames)
     else:
        headnames = None
     logging.info("Check for torch")
@@ -663,7 +708,7 @@ if __name__ == '__main__':
        seqs_spaced = seqs_spaced[0:seqlimit]
 
  
-    ic("Sequences", seqs)    
+    #ic("Sequences", seqs)    
 
     # The first step is to get embeddings
     if embedding_path:
@@ -686,11 +731,11 @@ if __name__ == '__main__':
                pickle.dump(embedding_dict, fOut, protocol=pickle.HIGHEST_PROTOCOL)
 
         if embed_only:
-            print("Quiting after saving embedding at {}".format(emb_outfile))
+            #print("Quiting after saving embedding at {}".format(emb_outfile))
             exit(0)
 
     # The sequences are divided into groups
-    ic(seqsim_thresh)
+    #ic(seqsim_thresh)
     cluster_seqnums_list, cluster_seqs_list,  cluster_names_list, cluster_hstates_list, to_exclude = get_seq_groups(seqs ,seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = seqsim_thresh, pca_plot = pca_plot )
 
     aln_fasta_list = []
@@ -720,7 +765,7 @@ if __name__ == '__main__':
         group_seqnums = cluster_seqnums_list[i]
         group_names = cluster_names_list[i]
         group_embeddings = cluster_hstates_list[i] 
-        ic("group seqnames", group_names, group_seqnums)
+        #ic("group seqnames", group_names, group_seqnums)
 
         group_seqs_out = "{}/{}.alignment_group{}.fasta".format(record_dir, outfile_name, i)
         group_records = []
@@ -744,8 +789,8 @@ if __name__ == '__main__':
     
             cluster_order, clustid_to_clust = clusts_from_alignment(alignment)
     
-            print("attempt squish, merging adjacent non-overlapping clusters")       
-            for rep in range(0,10):
+            #print("attempt squish, merging adjacent non-overlapping clusters")       
+            for rep in range(0,20):
                  prevclust = alignment
                  cluster_order, clustid_to_clust = squish_clusters(alignment, index, hidden_states, index_to_aa)                
                  alignment = make_alignment(cluster_order, group_seqnums, clustid_to_clust, group_names)
@@ -795,7 +840,7 @@ if __name__ == '__main__':
         
 
 
-        ic("aln_fasta_list", aln_fasta_list)
+        #ic("aln_fasta_list", aln_fasta_list)
         with open("{}/{}.all_fastas_aln.fasta".format(record_dir, outfile_name,), "w") as o:
     
             with open("{}/{}.key_table.txt".format(record_dir, outfile_name), "w") as tb:
@@ -831,7 +876,7 @@ if __name__ == '__main__':
     #                          mean_cosim = np.mean(upper)
     #                      else:
     #                         mean_cosim = 0
-    #                      ic(key, mean_cosim, len(indexes))
+    #                      #ic(key, mean_cosim, len(indexes))
 
 
 

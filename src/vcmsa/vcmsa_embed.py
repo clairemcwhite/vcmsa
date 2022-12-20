@@ -389,10 +389,12 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
     print("device", device) 
     device_ids =list(range(0, torch.cuda.device_count()))
     print("device_ids", device_ids)
+    
     if torch.cuda.device_count() > 1 and  cpu_only == False:
        print("Let's use", torch.cuda.device_count(), "GPUs!")
        model = nn.DataParallel(model, device_ids=device_ids).cuda()
        #model.to(device_ids) ??? 
+    #print(model.device())
    
     else:
        if cpu_only == True: 
@@ -436,14 +438,16 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
     numseqs = len(seqs)
     with torch.no_grad():
 
-        # For each chunk of data
+         # For each chunk of data
         for data in data_loader:
+            seq_time = time.time()
             #print(count * batch_size, numseqs)
             input = data.to(device)
             # DataParallel model splits data to the different devices and gathers back
             # nvidia-smi shows 4 active devices (when there are 4 GPUs)
+            embed_time = time.time()
             model_output = model(**input)
- 
+            print("embed_time = ", time.time() - embed_time)
             # Do final processing here. 
             if get_sequence_embeddings_final_layer_only == True:
 
@@ -461,7 +465,9 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
                 sequence_array_list.append(sequence_embeddings)
 
             else: #  get_aa_embeddings == True:
+                aa_time = time.time()
                 aa_embeddings, aa_shape = retrieve_aa_embeddings(model_output, model_type = model_type, layers = layers, heads = heads, padding = padding)
+                print("aa_time = ", time.time() - aa_time)
                 aa_embeddings = aa_embeddings.to('cpu')
                 aa_embeddings = np.array(aa_embeddings)
                 
@@ -508,7 +514,7 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
                         aa_array_list.append(aa_embeddings)
 
             count = count + 1
-
+            print("seq time = ", time.time() - seq_time)
         end = time.time() 
         print("Total time to embed = {}".format(end - start))
   
