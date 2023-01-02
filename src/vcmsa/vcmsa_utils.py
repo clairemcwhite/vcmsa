@@ -810,6 +810,8 @@ def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
     #print("Start remove_maxlen_padding")
     index_to_aa = {}
     aa_indices = []
+    print(hidden_states.shape)
+    print(padded_seqlen)
     seqlens = [len(x) for x in seqs_aas]
     for i in range(len(seqs_aas)):
         for j in range(padded_seqlen):
@@ -821,7 +823,7 @@ def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
            index_to_aa[index_num] = aa
            aa_indices.append(index_num)
 
-
+    
     # Remove maxlen padding from aa embeddings
     #ic(hidden_states.shape)
 

@@ -171,6 +171,7 @@ num_aligns_over_0.5correct <- bc_eval %>%
   nrow()
 
 
+# 93.2
 num_aligns_over_0.5correct/num_aligns
 
 
@@ -187,9 +188,9 @@ homstrad_sims <- read_csv("/scratch/gpfs/cmcwhite/aln_datasets/homstrad_aln_sims
 
 # Figure 2B
 sim_correct_plot <- bc_eval %>%
-  left_join(prot_lengths) %>%
+  left_join(total_aligned_positions) %>%
+  mutate(prop_correct = n/aligned_positions) %>%
   left_join(homstrad_sims)%>%
-   mutate(prop_correct = n/length) %>%
   filter(padding == "padding0") %>%
      ggplot(aes(x= same, y =  prop_correct, label = protein)) +
         geom_point(color = "grey50", alpha = 0.6, size = 1) +
@@ -213,7 +214,6 @@ median(tmp$prop_correct)
 
 
 ```
-
 
 
 Remove files where the three reference, and rest of the proteins are substantially different sizes
@@ -693,6 +693,55 @@ bc_plot %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/bc_plot.pdf",
 
 ```
 
+
+Supplemental timings figure
+```{r}
+
+metrics <- read_csv("/scratch/gpfs/cmcwhite/aln_comparison//eval_metrics.csv", col_names = FALSE) %>%
+  select(score = X1, experiment = X2, alg = X7, prot = X4, eval = X11) %>%
+  filter(!is.na(prot)) %>%
+  separate(experiment, into = c('set', NA, 'numseqs', NA, 'model'), sep = "_", extra = "merge", remove = FALSE)
+
+
+metrics_sel <- metrics %>% filter(prot %in% c("AhpC-TSA", "bromodomain",  "lacI", "Mur_ligase_C", "sh2")) %>%
+  filter(alg == "semantic") %>%
+  filter(grepl("scaletest", experiment)) %>%
+  pivot_wider(names_from = "eval", values_from = "score")
+
+read_csv_filename <- function(filename){
+  
+  df <- read_csv(filename)
+  df$filename <- filename
+  return(df)
+}
+
+traces <- read_csv("/scratch/gpfs/cmcwhite/aln_comparison/aln_evaluate_200_nopca_16layer_t5_padding0_nobc_mis_scaletest/traces/Mur_ligase_C.trace")
+directory <- "/scratch/gpfs/cmcwhite/aln_comparison/aln_evaluate_200_nopca_16layer_t5_padding0_nobc_mis_scaletest/traces/"
+filelist <- dir(directory, pattern = "*trace")
+traces <- map_dfr(filelist, ~read_csv_filename(paste0(directory, .))) 
+
+traces_sel <- traces %>% separate(filename, into = c(NA, NA, NA, NA, NA, NA, NA, "filename"), sep = "[/]" ) %>%
+  mutate(prot = str_replace(filename, ".trace", "")) %>% select(-filename) %>%
+  separate(`nextflow.trace/v2`, into = c("eval", "score"), sep = "=") %>%
+  filter(eval %in% c("realtime", "peak_vmem")) %>%
+  mutate(numseqs = "200") %>%
+  pivot_wider(names_from = "eval", values_from = "score") %>%
+  rename(peakVmem = peak_vmem) %>%
+  mutate(peakVmem = as.numeric(peakVmem)) %>%
+  mutate(realtime = as.numeric(realtime)) %>%
+  filter(prot %in% c("AhpC-TSA", "bromodomain", "lacI", "Mur_ligase_C", "sh2")) 
+
+ metrics_sel %>% #select(numseqs, eval, score, prot) %>%
+   bind_rows(traces_sel) %>%
+   mutate(numseqs = as.numeric(numseqs)) %>%
+ # mutate(numseqs = fct_relevel(numseqs, c("20", "50", "100", "200"))) %>%
+  ggplot(aes(x = numseqs, y = realtime/1000, group = prot)) +
+  ylab("seconds") +
+  geom_point() +
+  geom_line() +
+   scale_y_log10(labels = scales::comma)
+  
+```
 
 
 
