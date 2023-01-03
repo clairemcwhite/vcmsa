@@ -8,6 +8,8 @@ VcMSA uses protein language models to allow alignment of protein sets with conse
 
 This is an alpha version of the algorithm code that functions as a proof-of-concept, expect later optimization for speed and efficiency
 
+## Currently out of sync with biorxiv produced alignments (with worse output). To match, use github.com/clairemcwhite/transformer_infrastructure/hf_aligner2.py
+
 [Project Github repo](https://github.com/clairemcwhite/vcmsa)
 
 #### Authors
