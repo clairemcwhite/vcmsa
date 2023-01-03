@@ -538,7 +538,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
                 alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
                 #ic("current {}, previous record {}".format(alignment.numassigned,most_complete_alignment.numassigned))
                 if alignment.numassigned < most_complete_alignment.numassigned:
-                    #ic("Replacing current alignment with previous more complete alignment")
+                    print("Replacing current alignment with previous more complete alignment")
+
                     alignment = most_complete_alignment
                 else:
                     ic("Currently alignment is the most complete so far")
@@ -612,7 +613,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
         # THINGS TO DO AT THE END OF GAPFILLING CYCLE
         if alignment.numassigned > most_complete_alignment.numassigned:
-            #ic("This is the most complete alignment so far")
+            print("This is the most complete alignment so far")
             most_complete_alignment = alignment
    
         outaln = "{}/{}.alignment_clustering_group_{}_gapfilling_{:04}.aln".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
