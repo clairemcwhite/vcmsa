@@ -424,6 +424,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
     #print("old_len", len( rbh_list))
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
+    # ADD control option here
     rbh_list = maximum_increasing(rbh_list)
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
     #print("new_len", len(rbh_list))
@@ -712,7 +713,6 @@ if __name__ == '__main__':
        seqs_spaced = seqs_spaced[0:seqlimit]
 
  
-    #ic("Sequences", seqs)    
 
     # The first step is to get embeddings
     if embedding_path:

@@ -1624,8 +1624,61 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
     return(new_clusters, all_alternates_dict)
 
 
-#@profile
 def process_connected_set(connected_set, G, dup_thresh = 1.2,  betweenness_cutoff = 0.10, prev_G = None):
+    ''' 
+    This will take a connected sets and 
+    1) Check if it's very duplicated
+    2) If so, remove high betweenness nodes, and check for completeness again
+    3) If it's not very duplicated, removed any duplicates by best score
+    '''
+    ic("process_connected_set: betweenness", betweenness_cutoff, "dup_thresh", dup_thresh)
+    new_clusters = []
+    all_alternates_dict = {}
+    min_dupped =  min_dup(connected_set, dup_thresh)
+    if len(connected_set) > min_dupped:
+        #ic("cluster too big", connected_set)
+        # TRY removing high betweenness and evaluating completeness
+        ic("Check for betweenness")
+        new_G = remove_highbetweenness(G, betweenness_cutoff = 0.10)
+        #ic("prebet", G.vs()['name'])
+        #ic("postbet", new_G.vs()['name'])
+        #if len(new_Gs) > 1:
+        new_islands = new_G.clusters(mode = "weak")
+        for sub_G in new_islands.subgraphs():
+                alternates_dict = {}
+                sub_connected_set = sub_G.vs()['name']
+                #ic("postbet_island", sub_connected_set)
+                sub_min_dupped =  min_dup(sub_connected_set, dup_thresh)
+                #ic("sub_min_dupped", sub_min_dupped)
+                # Actually going to keep all clusters below min dup thresh
+                if (len(sub_connected_set) <= sub_min_dupped) or (len(sub_connected_set) <= 5):
+                    trimmed_sub_connected_set, alternates_dict = remove_doubles_by_graph(sub_connected_set, sub_G
+)
+                    #new_clusters.append(trimmed_sub_connected_set)
+                else:
+                    ic("still about min_dupped applying walktrap")
+                    new_walktrap_clusters, alternates_dict = get_new_clustering(sub_G, betweenness_cutoff = betweenness_cutoff,  apply_walktrap = True, prev_G = G)
+                    #print("CONNECTED_SET", connected_set)
+                    #print("SUB_CONNECTECT_SET", sub_connected_set)
+                    #print("NEW_WALKTRAP_CLUSTERS", new_walktrap_clusters)
+
+                    #if new_walktrap_clusters == connected_set
+                    for cluster in new_walktrap_clusters:
+                            new_clusters.append(cluster)
+                    #ic(new_clusters)
+                    if alternates_dict:
+                        all_alternates_dict = {**all_alternates_dict, **alternates_dict}
+        #return(new_clusters)
+    else:
+        trimmed_connected_set, all_alternates_dict = remove_doubles_by_graph(connected_set, G)
+        ic("after trimming by removing doubles", trimmed_connected_set)
+        new_clusters = [trimmed_connected_set]
+    # If no new clusters, returns []
+    return(new_clusters, all_alternates_dict)
+
+
+#@profile
+def process_connected_set_new(connected_set, G, dup_thresh = 1.2,  betweenness_cutoff = 0.10, prev_G = None):
     ''' 
     This will take a connected sets and 
     1) Check if it's very duplicated
