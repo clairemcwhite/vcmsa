@@ -286,7 +286,7 @@ def retrieve_aa_embeddings(model_output, model_type, layers = None, padding = 0,
     if model_type == "bert":
       front_trim = 1 + padding
       end_trim = 1 + padding
-    elif model_type == "t5":
+    elif model_type == "t5" or model_type == "gpt2":
       front_trim = 0 + padding
       end_trim = 1 + padding
     else:
@@ -328,6 +328,8 @@ def load_model(model_path, output_hidden_states = True, output_attentions = Fals
                        output_hidden_states=output_hidden_states, 
                        output_attentions = output_attentions)
 
+    if model_type == "gpt2":
+         tokenizer.pad_token = tokenizer.eos_token
     if half == True:
         model.half() # Put model in half precision mode for faster embedding
 
@@ -432,8 +434,6 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
     maxlen = max(seqlens)
     print("padding", padding)
     print('maxlen', maxlen)
-    #if padding:
-    #   maxlen = maxlen + 10
     get_sequence_embeddings_final_layer_only = False    
     numseqs = len(seqs)
     with torch.no_grad():
@@ -468,6 +468,7 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
                 aa_time = time.time()
                 aa_embeddings, aa_shape = retrieve_aa_embeddings(model_output, model_type = model_type, layers = layers, heads = heads, padding = padding)
                 print("aa_time = ", time.time() - aa_time)
+                print("aa_shape", aa_shape)
                 aa_embeddings = aa_embeddings.to('cpu')
                 aa_embeddings = np.array(aa_embeddings)
                 
@@ -510,6 +511,10 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
                          #if padding:
                         dim2 = maxlen - (aa_embeddings.shape[1])
                         npad = ((0,0), (0, dim2), (0,0))
+                        print(dim2)
+                        print(npad)
+                        print(aa_embeddings.shape[1])
+                        print(maxlen)
                         aa_embeddings = np.pad(aa_embeddings, npad)
                         aa_array_list.append(aa_embeddings)
 

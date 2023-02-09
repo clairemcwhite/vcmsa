@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+s#!/usr/bin/env python3
 
 # To generate embeddings
 
@@ -1530,8 +1530,58 @@ def process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True, prev_G =
           #print(x)
     return(clusters)
 
+def delete_low_authority(G)
+      hub_scores = G.hub_score()
+      names = [x['name'] for x in G.vs()]
+      indices = [x.index for x in G.vs()]
 
+      vx_names = G.vs()
+      hub_names = list(zip(names, vx_names, hub_scores))
+
+      high_authority =  [x[0:2] for x in hub_names if x[2]  > 0.2]
+      high_authority_nodes = [x[0] for x in high_authority]
+      high_authority_nodes_vx = [x[1] for x in high_authority]
+      
+
+      low_authority_nodes = [x for x in names if x not in high_authority_nodes]   #[x[0] for x in hub_names if x[2]  <= 0.2]
+      low_authority_node_ids = [x for x in indices if x not in high_authority_vx]  # [x[1] for x in hub_names if x[2]  <= 0.2]
+
+      if len(low_authority_nodes) > 0 and len(high_authority_nodes) > 0:
+          high_authority_edges =  G.es.select(_within = high_authority_nodes_vx)
+          #If not edges left after removing low authority nodes
+          if len(high_authority_edges) > 0:
+              G.delete_vertices(low_authority_node_ids)
+    return(G)
+
+
+def cleaner_clustering(G, natural = False, remove_low_authority = False):
+    new_clusters = []
+
+    if remove_low_authority == True:
+       G = delete_low_authority(G)
+
+    if natural == True:
+       clustering = G.clusters(mode = "weak")
+    else:
+       clustering = G.community_walktrap(steps = 3, weights = 'weight').as_clustering()
+
+    clusters = [x.vs()[name] for x in clustering.subgraphs()]
+    new_clusters = [x for x in clusters if check_completeness(x) == True]
+
+    # Remove amino acids that have been clustered from the graph for future rounds
+    clustered_names = list(flatten(new_clusters)) 
+    to_delete = [v.index for v in G.vs.select(name_in=clustered_names)]
+    G.delete_vertices(to_delete)   
+ 
     
+    # The idea here is to look for natural clusters, 
+    # Remove those vertices from the graph
+    # Then do a walktrap, which will break up the network. (Find graph from clustering function?)
+    # Remove any complete clusters from the graph. (Including too small clusters). 
+    # Then that walktraped graph will be the new input graph (controlled when function is called).
+    return(new_clusters, G)
+    
+
 
 #@profile
 def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, prev_G = None):
@@ -1568,25 +1618,26 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
             # First remove weakly linked aa's then try again
             # Walktrap is last resort
             #ic("similarity_jaccard, authority_score")
-            hub_scores = G.hub_score()
-            names = [x['name'] for x in G.vs()]
+            G = delete_low_authority(G)
+            #hub_scores = G.hub_score()
+            #names = [x['name'] for x in G.vs()]
             #ic(names)
-            vx_names = G.vs()
-            hub_names = list(zip(names, vx_names, hub_scores))
+            #vx_names = G.vs()
+            #hub_names = list(zip(names, vx_names, hub_scores))
 
-            high_authority_nodes = [x[0] for x in hub_names if x[2]  > 0.2]
-            high_authority_nodes_vx = [x[1] for x in hub_names if x[2]  > 0.2]
+            #high_authority_nodes = [x[0] for x in hub_names if x[2]  > 0.2]
+            #high_authority_nodes_vx = [x[1] for x in hub_names if x[2]  > 0.2]
 
-            low_authority_nodes = [x[0] for x in hub_names if x[2]  <= 0.2]
-            low_authority_node_ids = [x[1] for x in hub_names if x[2]  <= 0.2]
+            #low_authority_nodes = [x[0] for x in hub_names if x[2]  <= 0.2]
+            #low_authority_node_ids = [x[1] for x in hub_names if x[2]  <= 0.2]
 
             #ic("removing low authority_nodes", low_authority_nodes)
-            if len(low_authority_nodes) > 0 and len(high_authority_nodes) > 0:
-                high_authority_edges =  G.es.select(_within = high_authority_nodes_vx)
-                #If not edges left after removing low authority nodes
-                if len(high_authority_edges) > 0:
-
-                    G.delete_vertices(low_authority_node_ids)
+            #if len(low_authority_nodes) > 0 and len(high_authority_nodes) > 0:
+            #    high_authority_edges =  G.es.select(_within = high_authority_nodes_vx)
+            #    #If not edges left after removing low authority nodes
+            #    if len(high_authority_edges) > 0:
+#
+            #       G.delete_vertices(low_authority_node_ids)
                 names = [x['name'] for x in G.vs()]
 
                 min_dupped = min_dup(names, 1.2)
@@ -1680,6 +1731,7 @@ def process_connected_set(connected_set, G, dup_thresh = 1.2,  betweenness_cutof
 #@profile
 def process_connected_set_new(connected_set, G, dup_thresh = 1.2,  betweenness_cutoff = 0.10, prev_G = None):
     ''' 
+    # This is worse than the old process connected set
     This will take a connected sets and 
     1) Check if it's very duplicated
     2) If so, remove high betweenness nodes, and check for completeness again
