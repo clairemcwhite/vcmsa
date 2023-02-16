@@ -93,6 +93,10 @@ def get_align_args():
 
     parser.add_argument("-l2", "--headnorm", dest = "headnorm",  action = "store_true", required = False, 
                         help="Take L2 normalization of each head")
+    parser.add_argument('-d', '--debug', help="Print debugging statements", action="store_const", dest="loglevel", const=logging.DEBUG, default=logging.INFO,
+)
+
+
     args = parser.parse_args()
 
     return(args)
@@ -186,8 +190,8 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
         G.es['weight'] = weightlist
 
         G = G.simplify(combine_edges=max)
-        print(G)
-        islands = G.clusters(mode = "weak")
+        #print(G)
+        islands = G.connected_components(mode = "weak")
         for island in islands:
              print("island", island) 
         first_members = [x[0] for x in islands]
@@ -199,7 +203,8 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
                 continue
               else:
                 G.add_edge(x, y, weight = 0.0000001)
-        islands = G.clusters(mode = "weak")
+       
+        islands = G.connected_components(mode = "weak")
         for island in islands:
              print("island", island) 
         #ic("G", G)
@@ -209,7 +214,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
 
         seq_clusters = G.community_walktrap(steps = 3, weights = 'weight').as_clustering() 
         if len(seq_clusters.subgraphs()) == len(G.vs()):
-             seq_clusters = G.clusters(mode = "weak") # walktrap can cluster nodes individually. See UBQ
+             seq_clusters = G.connected_components(mode = "weak") # walktrap can cluster nodes individually. See UBQ
 
         #ic("After walktrap", seq_clusters)
         for seq_cluster_G in seq_clusters.subgraphs():
@@ -426,6 +431,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
     # ADD control option here
     rbh_list = maximum_increasing(rbh_list)
+     
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
     #print("new_len", len(rbh_list))
     
@@ -442,22 +448,51 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
     G = graph_from_rbh(rbh_list, directed = False)
  
-
+    all_alternates_dict = {}
     clusters_list = []
+    
+    print("Begin with only natural clusters")
+    cluster_list1 = []
+    cluster_list2 = []
+    cluster_list3 = []
+    cluster_list4 = []
+
     if len(seqs) > 2:
         minclustsize = int(len(seqs)/2) + 1
         #if len(clusters_list) == 0:
         #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
-        clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 0.1, ignore_betweenness = False, apply_walktrap = True)
+        #clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 0.1, ignore_betweenness = False, apply_walktrap = True)
         #clusters_list = process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True)
-
+        #print(G)
+        cluster_list1, G = first_clustering2(G, natural = True)
+        print("cluster_list1", cluster_list1)
+        cluster_list2, G = first_clustering2(G, natural = True, remove_low_authority = True)
+        print("cluster_list2", cluster_list2)
+        #print("after 2", G)
+        #cluster_list3, G = first_clustering2(G, natural = False, remove_low_authority = True)
+        #print("after 3", G)
+        #print("cluster_list3", cluster_list3)
+        #cluster_list4, G = first_clustering2(G, natural = False, remove_low_authority = True)
+        #print("cluster_list4", cluster_list4)
     else:
         minclustsize = 2
         #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
-        clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 1, ignore_betweenness = True, apply_walktrap = True)
+        #clusters_list, all_alternates_dict = first_clustering(G, betweenness_cutoff = 1, ignore_betweenness = True, apply_walktrap = True)
+        # Progressively cluster and remove completed clusters from network. Continue to try and build clusters. Potentially only go to future steps if no natural clusters found
+        cluster_list1, G = first_clustering2(G, natural = True)
+        print("cluster_list1", cluster_list1)
+        cluster_list2, G = first_clustering2(G, natural = True, remove_low_authority = True)
+        print("cluster_list2", cluster_list2)
+        #print("after 2", G)
+        #cluster_list3, G = first_clustering2(G, natural = False, remove_low_authority = True)
+        #print("cluster_list3", cluster_list3)
+        #print("after 3", G)
+        #cluster_list4, G = first_clustering2(G, natural = False, remove_low_authority = False)
+        #print("cluster_list4", cluster_list4)
 
+    clusters_list = cluster_list1 + cluster_list2 # + cluster_list3 + cluster_list4      
        
     clusters_list = [x for x in clusters_list if len(x) > 1]
     #for x in clusters_list:
@@ -479,10 +514,10 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
              # This is ever happening?
              if len(clust) > 2:
                 too_small.append(clust)
-    #for x in clusters_filt:
-          #ic("First clusters with small removed", x)
-    #for x in too_small:
-          #ic("collected as too_small", x)
+    for x in clusters_filt:
+          print("First clusters with small removed", x)
+    for x in too_small:
+          print("collected as too_small", x)
     #ic("Getting DAG of cluster orders, removing feedback loops")
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_filt, seqs_aas, gapfilling_attempt = 0, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seq_names, args = args)
 
@@ -514,7 +549,6 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     ############## CONTROL LOOP ###################
     for gapfilling_attempt in range(0, max_iterations):
         gapfilling_attempt = gapfilling_attempt + 1
-        #print("Align this is gapfilling attempt ", gapfilling_attempt)
         logging.info("gapfilling_attempt {}".format(gapfilling_attempt))
         if gapfilling_attempt > 6 and minclustsize > 2 and gapfilling_attempt % 2 == 1:
                 minclustsize = minclustsize - 1
@@ -525,7 +559,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
            #ic("unassign", x)
 
         if len(unassigned) == 0:
-            #ic("Alignment complete after gapfilling attempt {}".format(gapfilling_attempt - 1))
+            logging.info("Alignment complete after gapfilling attempt {}".format(gapfilling_attempt - 1))
      
             alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
             return(alignment, index, hidden_states, index_to_aa)
@@ -533,7 +567,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         if ( gapfilling_attempt == max_iterations or unassigned == history_unassigned['threebefore'] or  unassigned == history_unassigned['twobefore'] ) and gapfilling_attempt > 10:
             if minscore > 0.1 and gapfilling_attempt != max_iterations:
                 minscore = 0.1
-                #ic("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
+                logging.info("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
             ################ Final stage #############3
             else: 
                 alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
@@ -543,8 +577,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
                     alignment = most_complete_alignment
                 else:
-                    ic("Currently alignment is the most complete so far")
-                #ic("Align by placing remaining amino acids")
+                    logging.info("Currently alignment is the most complete so far")
+                logging.info("Placing remaining amino acids")
                 cluster_order, clustid_to_clust, pos_to_clustid, alignment = fill_in_hopeless(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states, gapfilling_attempt, args = args)
                 unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
                 #ic('This unassigned should be empty', unassigned)
@@ -556,12 +590,12 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         history_unassigned['twobefore'] = history_unassigned['onebefore']
         history_unassigned['onebefore'] = unassigned
         
+        #CHANGE 
         apply_walktrap = False
 
         # Do one or two rounds of clustering between guideposts
         if gapfilling_attempt in list(range(1, max_iterations, 2)):#  or gapfilling_attempt in [1, 2, 3, 4]:
-
-            #ic("Align by clustering within guideposts")
+            print("Align by clustering within guideposts")
             # Don't allow modification of previous guideposts
             if gapfilling_attempt > 4:
                  apply_walktrap = True
@@ -576,7 +610,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
-
+            logging.info("Align by clustering reciprocal best hit network")
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_rbh = fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, I2,  gapfilling_attempt, minscore = minscore ,minclustsize = minclustsize, ignore_betweenness = ignore_betweenness, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, seqnames = seq_names, args = args)
  
             outnet = "{}/{}.testnet_clustering_group_{}_gapfilling_{:04}.csv".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
@@ -588,16 +622,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
                      outfile.write(outstring)
 
 
- 
-            #for x in too_small:
-               #ic("collected as too_small after clustering", x)        
-
-            #for key,value in clustid_to_clust.items():
-                 #ic(key, value)
-
         else:
             
-            #ic("Align by best match (looser)")
+            print("Align by best match (looser)")
             logging.info("Add aa's to existing clusters")
             if gapfilling_attempt > 3:
               if gapfilling_attempt < 15: 
@@ -607,9 +634,10 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
-            cluster_order, clustid_to_clust, pos_to_clustid, alignment, match_dict = fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = minclustsize, remove_both = True, match_dict= match_dict, seqnames = seq_names, args = args)
+            print("starting looser")
+            cluster_order, clustid_to_clust, pos_to_clustid, alignment, match_dict = fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = minclustsize, remove_both = True, match_dict= match_dict, seqnames = seq_names, args = args, I2 = I2)
+            print("looser complete")
             too_small = []
-            #cluster_order_merge, clustid_to_clust_merge, pos_to_clustid_merge, alignment)
 
 
         # THINGS TO DO AT THE END OF GAPFILLING CYCLE
@@ -643,7 +671,6 @@ if __name__ == '__main__':
 
     args = get_align_args()
 
-    #print("args", args)
     fasta_path = args.fasta_path
     embedding_path = args.embedding_path
     outfile = args.out_path
@@ -682,7 +709,7 @@ if __name__ == '__main__':
     logname = "{}/{}.align.log".format(record_dir, outfile_name)
     log_format = "%(asctime)s::%(levelname)s::"\
              "%(filename)s::%(lineno)d::%(message)s"
-    logging.basicConfig(filename=logname, level='DEBUG', format=log_format)
+    logging.basicConfig(filename=logname, level=args.loglevel, format=log_format)
 
 
 
@@ -792,14 +819,15 @@ if __name__ == '__main__':
             hidden_states_list.append(hidden_states)
     
             cluster_order, clustid_to_clust = clusts_from_alignment(alignment)
-    
-            #print("attempt squish, merging adjacent non-overlapping clusters")       
-            for rep in range(0,20):
-                 prevclust = alignment
-                 cluster_order, clustid_to_clust = squish_clusters(alignment, index, hidden_states, index_to_aa)                
-                 alignment = make_alignment(cluster_order, group_seqnums, clustid_to_clust, group_names)
-                 if alignment.alignment == prevclust:
-                        break
+            squish = False
+            if squish == True: 
+                print("attempt squish, merging adjacent non-overlapping clusters")       
+                for rep in range(0,20):
+                     prevclust = alignment
+                     cluster_order, clustid_to_clust = squish_clusters(alignment, index, hidden_states, index_to_aa)                
+                     alignment = make_alignment(cluster_order, group_seqnums, clustid_to_clust, group_names)
+                     if alignment.alignment == prevclust:
+                            break
             alignment = make_alignment(cluster_order, group_seqnums, clustid_to_clust, group_names)
              
             
