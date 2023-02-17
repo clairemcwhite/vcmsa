@@ -45,7 +45,7 @@ import line_profiler
 import numpy as np
 from pandas.core.common import flatten
 import pandas as pd
-from collections import Counter
+from collections import Counter, OrderedDict
 import logging
 from time import time
 
@@ -871,22 +871,27 @@ def remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen):
 
 #@profile
 def split_distances_to_sequence(D, I, index_to_aa, numseqs, seqlens):
+   # Formarly, was 1: [[aa1:1.0, aa2:0.9]
+   # reconfiguring to be {aa1: 1 : OrderedDict{aa1:1.0, aa2:0.9}
 
    query_aa_dict = {}
    for i in range(len(I)):
       query_aa = index_to_aa[i]
       # Make dictionary, one per sequence
-      target_dict = {} 
+      #target_dict = {} 
+      target_dict = {}
       for k in range(numseqs): # Check that this indexing is right (by numseq instead of seqnums)
-          target_dict[k] = []
+          #target_dict[k] = []
+          target_dict[k] = OrderedDict()
       for j in range(len(I[i])):
            try:
               target_aa = index_to_aa[I[i][j]]
            except Exception as E:
                continue
            seqindex = target_aa.seqindex
-           target_dict[seqindex].append([target_aa, D[i][j]])
-
+           #target_dict[seqindex].append([target_aa, D[i][j]])
+           target_dict[seqindex][target_aa] = D[i][j]
+      #print("dict1", target_dict)
       query_aa_dict[query_aa] = target_dict
    return(query_aa_dict)
 
@@ -925,11 +930,12 @@ def get_besthits(I,  minscore = 0.1 ):
 
    hitlist = []
    for aa in I.keys():
-
       for targetseq in I[aa].keys():
           if len(I[aa][targetseq]) > 0 :
               # Top score is always first
-              besthit = I[aa][targetseq][0]
+              #besthit = I[aa][targetseq][0]
+              # Get the first item from an OrderedDict
+              besthit = next(iter(I[aa][targetseq].items()))  
               besthit_aa = besthit[0] # AA
               besthit_score = besthit[1] #score to query aa
 
@@ -1820,9 +1826,9 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     '''
     Run the same original clustering, ??? allows overwritting of previous clusters
     
-    No, do network to find ranges for allxall search. 
     If a new member of an rbh cluster has a large unassigned range, check if has higher rbh t o sequence?
     '''
+    start_clust = time()
     all_alternates_dict = {}
     clusters_filt = list(clustid_to_clust.values())
     #ic("fill_in_unassigned_w_clustering: TESTING OUT CLUSTERS_FILT")
@@ -1831,31 +1837,47 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     # extra arguments?
     edgelist = []
     #ic("fill_in_unassigned_w_clustering:unassigned", unassigned)
+    get_targets_time = time()
+
     for gap in unassigned:
+        t1_time = time()
         #print("fill_in_unassigned_w_clustering", gap)
         gap_edgelist = get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)
         edgelist = edgelist + gap_edgelist
+        print("TESTER: individual time", time() - t1_time)
+    print("TESTER: get_targets_time", time() - get_targets_time)
+
+
     edgelist_G = igraph.Graph.TupleList(edges=edgelist, directed=False)
     edgelist_G = edgelist_G.simplify() # Remove duplicate edges
     islands = edgelist_G.connected_components(mode = "weak")
 
+    # Instead of full edgelist, just too minimum spanning tree
+
     new_clusters_from_rbh = []
     all_new_rbh  = []
-    # Neighbors = everything in the subgraph
+    # Neighbors = everything in the subgraph.
+    # Why use neighbors function? 
     # Something about this not working 0-10-Y, 4-8-Y
     # Make sure gap is also identical, not just the vertexes?
+    total_address = time()
+
+    # This is parallelizable here
     for sub_G in islands.subgraphs():
        neighbors = {}
        for vertex in sub_G.vs():
            vertex_neighbors = sub_G.neighbors(vertex)
            neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
 
+       address_time = time()
        newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict)
+       print("address time", time()  - address_time)
        print("newer clusters", newer_clusters)
        #ic(newer_rbh[0:5])
        all_alternates_dict = {**all_alternates_dict, **alternates_dict}
        new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
        all_new_rbh = all_new_rbh + newer_rbh
+    print("TESTER total_addressing time", time() - total_address)
     new_clusters = []
     too_small = []
     print("new_clusters_from_rbh", new_clusters_from_rbh)
@@ -1868,7 +1890,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
              # This is never happening?
              if len(clust) > 1:
                 too_small.append(clust)
-
+    dedup_time = time()
     # It was at one point very important to removeSublist here
     # Is it anymore?
     new_clusters = removeSublist(new_clusters)
@@ -1885,7 +1907,9 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     # If this makes clusters too small remove them 
     new_clusters = [clust for clust in new_clusters if len(clust) >= minclustsize]
 
-   # In this section, remove any members of a new cluster that would bridge between previous clusters and cause over collapse
+    print("TESTER dedup time", time() - dedup_time)
+    overlap_time = time()
+    # In this section, remove any members of a new cluster that would bridge between previous clusters and cause over collapse
     new_clusters_filt = []
     for clust in new_clusters:
          clustids = []
@@ -1920,14 +1944,16 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
     clusters_new = remove_overlap_with_old_clusters(new_clusters_filt, clusters_filt)
     clusters_merged = clusters_new + clusters_filt
-
+    print("TESTER overlap time", time() - overlap_time)
     for x in clusters_merged:
        print("clusters_merged", x)
-    
+    print("TESTER:clustering_time", time() - start_clust)
+    start = time() 
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_merged, seqs_aas, gapfilling_attempt, minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seqnames, args = args)
+    print("TESTER:organizing_time", time() - start)
 
-    print(clustid_to_clust)
-    print(too_small)
+    #print(clustid_to_clust)
+    #print(too_small)
     return(cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_rbh)
 
 
@@ -1940,16 +1966,29 @@ def get_targets(gap, seqs_aas, cluster_order, pos_to_clustid):
         ending_clustid = gap[2]
         gap_seqaas = gap[1]
         #gap_seqnum = list(set([x.seqnum for x in gap_seqaas]))[0]
+        get_range_time = time()
+        # This is fast enough
         target_aas_list = get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
-        #if "3-2-Y" in gap_seqaas:
-        #      #ic("HERE")
+        print("TESTER get_ranges time", time() - get_range_time)
 
+        print_time = time()
+        print("target_aas_list", gap, target_aas_list)
+        print("TESTER print time", time() - print_time)
         edgelist = []
+
+        flatten_time = time()
         target_aas = list(flatten(target_aas_list))
+        print("TESTER flatten_time", time() - flatten_time)
+        last_time = time()
+        # THIS LOOP IS TAKING WAYY TOO LONG
+        print("TESTER targets", target_aas)
+        print("TESTER gap_seqaas", gap_seqaas)
+        print("TESTER listlens", len(gap_seqaas), len(target_aas))
         for query in gap_seqaas:
               for target in target_aas:
                   edgelist.append([query, target])
-
+        print("TESTER edgelist", len(edgelist))
+        print("TESTER: last time", time() - last_time)
         return(edgelist)
 
 
@@ -1974,7 +2013,8 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
             for query_aa in limited_I2.keys():
                  # These keys 
                  for seq in limited_I2[query_aa].keys():
-                       limited_I2[query_aa][seq] = [x for x in limited_I2[query_aa][seq] if x[0] in neighbors[query_aa]]
+                       #limited_I2[query_aa][seq] = [x for x in limited_I2[query_aa][seq] if x[0] in neighbors[query_aa]]
+                       limited_I2[query_aa][seq] =  OrderedDict({k:v for k,v in limited_I2[query_aa][seq].items() if k in neighbors[query_aa]}) 
             #ic("limited_I2", limited_I2)
             end = time()
             #ic(end - start)
@@ -2003,10 +2043,10 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
  
         cluster_list2, G = first_clustering2(G, natural = True, remove_low_authority = True)
         print("cluster_list2", cluster_list2)
-        print("after 2", G)
+        #print("after 2", G)
         cluster_list3, G = first_clustering2(G, natural = False, remove_low_authority = True)
 
-        print("after 3", G)
+        #print("after 3", G)
         print("cluster_list3", cluster_list3)
         cluster_list4, G = first_clustering2(G, natural = False, remove_low_authority = True)
         print("cluster_list4", cluster_list4)
@@ -2051,6 +2091,7 @@ def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_
     matches = []
 
     match_scores = []
+    
     unassigned = format_gaps(unassigned, max(clustid_to_clust.keys()))
 
     for gap in unassigned:
@@ -2074,24 +2115,26 @@ def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_
             matches = matches + match_dict[already_searched]
         else:
             gap_matches = []
+
             for gap_aa in gap[1]:
-                start = time()
-                print(I2[gap_aa]) 
-                print("dict time", time() - start)
+                #start = time()
+                #candidates_aa2 = I2[gap_aa]
+                #print("pull from dict", time() - start)
 
-
-                start = time()
+                #start = time()
                 
-                candidates_aa = get_set_of_scores(gap_aa, index, hidden_states, index_to_aa)
-                print("get_set_of_scores", time() - start)
-                print("candidates_aa", candidates_aa)
+                #candidates_aa = get_set_of_scores(gap_aa, index, hidden_states, index_to_aa)
+                #print("get_set_of_scores", time() - start)
                 # Slower
+                #print('candidates_aa', candidates_aa)
                 start = time()
                 # For each clustid_to_clust, it should be checked for consistency. 
-                output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, candidates_aa)
+                #output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, candidates_aa, I2)
+                output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,  I2)
                 # Fast
-                print("get_best_matches", time() - start)
+                #print("get_best_matches", time() - start)
                 if output:
+                   print("output", output)
                    gap_matches.append(output)
             matches = matches + gap_matches
             match_dict[already_searched] = gap_matches
@@ -2154,7 +2197,16 @@ def get_best_of_matches(clustid_to_clust, matches):
     return(clustid_to_clust)
 
 #@profile
-def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, candidates_w_score):
+#def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, candidates_w_score):
+#     # Don't update the cluster here, send it back. 
+#     # candidate_w_score = zipped tuple [aa, score]
+#    scores = []
+#    clustid_to_clust[clustid] = newclust
+#    #ic(clustid_to_clust)
+#    return(clustid_to_clust)
+
+#@profile
+def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, I2): #, candidates_w_score, I2):
      # Don't update the cluster here, send it back. 
      # candidate_w_score = zipped tuple [aa, score]
     scores = []
@@ -2164,17 +2216,37 @@ def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,
     #ic(starting_clustid, ending_clustid)
     #ic(gap_aa)
     #ic(clustid_to_clust)
+    #print("gap_aa", gap_aa)
+    #print(I2[gap_aa])
     for cand in range(starting_clustid + 1, ending_clustid):
          #print("candidate", gap_aa, cand,  clustid_to_clust[cand], "bestscore", current_best_score, current_best_match)
 
          candidate_aas =  clustid_to_clust[cand]
-         incluster_scores = [x for x in candidates_w_score if x[0] in candidate_aas]
+         
+         start = time()
+         incluster_scores = []
+     
+         for x in candidate_aas:
+            try:
+                incluster_scores.append([x, I2[gap_aa][x.seqindex][x]])
+            except Exception as E:
+                #print(x, "not found")                
+                # Not all clustered aa's will by in the I2 for a particular query aa
+                continue
+         
+         #print("incluster scores2", incluster_scores2)
+         #print("ic scores2", time() - start)
+         #for target in candidates_aas:
+         #incluster_scores2 = [x for x in I2[aa] if x
+               
+         
+         #incluster_scores = [x for x in candidates_w_score if x[0] in candidate_aas]
          #print("incluster scores", incluster_scores)
          if incluster_scores:
              total_incluster_score = sum([x[1] for x in incluster_scores]) / len(incluster_scores) # Take the mean score within the cluster. Or median?
              #print("total_inclucster", total_incluster_score)
              if total_incluster_score > current_best_score:
-                if total_incluster_score > 0.5: # Bad matches being added (ex. 0.3)
+                if total_incluster_score > 0.5: # Bad matches being added (ex. 0.3), note, this isn't happening anymore because scores like this don't make it into the index
                   current_best_score = total_incluster_score
                   current_best_match = cand
                   match_found = True
@@ -2971,15 +3043,14 @@ def consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
               if finished == True:
                   cluster_list.append(natural_cluster)
           else:
-             #ic("Check if duplicated")
-             #ic("If duplicated, see if removing one of the aas makes consistent")
+             ic("Check if duplicated")
+             ic("If duplicated, see if removing one of the aas makes consistent")
              seqnums = [x.seqnum for x in natural_cluster]
              if len(seqnums) < len(natural_cluster):
                   new_cluster = remove_doubles_by_consistency(natural_cluster, pos_to_clustid, add_back = True)
                   finished = check_completeness(new_cluster)
                   if finished == True:
                      cluster_list.append(new_cluster)
-
     #for x in cluster_list:
           #ic("natural_cluster", x)
 

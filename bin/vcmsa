@@ -398,6 +398,10 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     logging.info("KNN done")
     start = time()
     # Quite slow 
+    #print(k)
+    #print(D1)
+    #print(D1.shape)
+    #return(0)
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
     end = time()
     #print("time to split", end-start)
