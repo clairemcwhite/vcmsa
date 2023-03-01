@@ -367,7 +367,7 @@ class ListDataset(Dataset):
 
 
 
-def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, get_aa_embeddings = True, padding = 5, ragged_arrays = False, aa_pcamatrix_pkl = None, sequence_pcamatrix_pkl = None, heads = None, layers = None, strat="meansig", cpu_only = False):
+def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, get_aa_embeddings = True, padding = 5, ragged_arrays = False, aa_pcamatrix_pkl = None, sequence_pcamatrix_pkl = None, heads = None, layers = None, strat="meansig", cpu_only = False, half = False):
     '''
     Encode sequences with a transformer model
 
@@ -382,7 +382,12 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
        ak.numba.register()
     print("CUDA available?", torch.cuda.is_available())
 
-    model, tokenizer, model_config = load_model(model_path, return_config = True)
+    # half precision doesn't work on CPU 
+    if not torch.cuda.is_available():
+        half = False
+
+
+    model, tokenizer, model_config = load_model(model_path, return_config = True, half = half)
     model_type = model_config.model_type
     print("This is a {} model".format(model_type))
     print("Model loaded")
@@ -399,7 +404,8 @@ def get_embeddings(seqs, model_path, seqlens, get_sequence_embeddings = True, ge
     #print(model.device())
    
     else:
-       if cpu_only == True: 
+       if cpu_only == True:
+           half = False 
            print("Embedding on cpu, even though gpu available")
 
        model = model.to(device)

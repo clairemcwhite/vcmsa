@@ -22,20 +22,21 @@ import logging
 
 from time import time
 
+from scalene import scalene_profiler
+
 # File IO
 import os
 import shutil
 import sys
 
-import line_profiler
-import atexit
-profile = line_profiler.LineProfiler()
-#builtins.__dict__['profile'] = prof
+#import line_profiler
+#import atexit
+#profile = line_profiler.LineProfiler()
 
 #atexit.register(profile.ic_stats)
 
 
-@profile
+#@profile
 def get_align_args():
 
     parser = argparse.ArgumentParser()
@@ -103,7 +104,7 @@ def get_align_args():
 
 
  
-@profile
+#@profile
 def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75, pca_plot = False):
 
     aa_embeddings = embedding_dict['aa_embeddings'] # this is numseqs x padded_seqlen x embedding_dim
@@ -131,7 +132,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
           #ic(seq_i_seq_embedding.shape)
           sequence_embedding_list.append(seq_i_seq_embedding)
 
-    sequence_array = np.array(sequence_embedding_list)
+    sequence_array = np.array(sequence_embedding_list, dtype="float32")
     numseqs = len(seqs)
     G, s_index = get_seqsims(sequence_array, k = numseqs)
     to_exclude = []
@@ -305,7 +306,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
     return(cluster_seqnums_list, cluster_seqs_list,  cluster_names_list, group_hstates_list, to_exclude)
 
 
-@profile
+#@profile
 def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, alignment_group = 0, args = None):
     """
     Required args: record_dir, outfile_name, do_pca, headnorm
@@ -329,7 +330,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
 
     logging.info("Flattening hidden states list")
-    hidden_states = np.array(reshape_flat(hstates_list))  
+    hidden_states = np.array(reshape_flat(hstates_list), dtype="float32")
     logging.info("embedding_shape: {}".format(hidden_states.shape))
 
 
@@ -604,7 +605,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
             if gapfilling_attempt > 4:
                  apply_walktrap = True
 
-            if gapfilling_attempt > 3:
+            if gapfilling_attempt > 300:
               if gapfilling_attempt < 15: 
                 # This removes 'stranded' amino acids, where neither the previous or next amino acid are placed adjacent. 
                 # If a good cluster, will be added right back
@@ -658,7 +659,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     return( alignment,  index, hidden_states,  index_to_aa)   
 
 
-@profile
+#@profile
 def tracefunc(frame, event, arg, indent=[0]):
     package_name = __name__.split('.')[0]
 
@@ -668,6 +669,8 @@ def tracefunc(frame, event, arg, indent=[0]):
     return tracefunc
 
 if __name__ == '__main__':
+
+    
 
     import sys
     sys.settrace(tracefunc)
@@ -760,7 +763,8 @@ if __name__ == '__main__':
                                     layers = layers,  
                                     padding = padding,
                                     heads = headnames,
-                                    cpu_only = cpu_only)
+                                    cpu_only = cpu_only, 
+                                    half = True)
         if emb_outfile:
            with open(emb_outfile, "wb") as fOut:
                pickle.dump(embedding_dict, fOut, protocol=pickle.HIGHEST_PROTOCOL)
