@@ -83,7 +83,7 @@ threadpoolctl==3.1.0
 tokenizers==0.13.2
 toml==0.10.2
 torch==1.10.2
-torchvision==0.14.1a0+b69fce3
+torchvision==0.14.1
 tornado==6.2
 tqdm==4.64.1
 traitlets==5.9.0
