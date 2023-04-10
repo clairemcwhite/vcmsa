@@ -91,7 +91,6 @@ transformers==4.24.0
 typing_extensions==4.4.0
 unicodedata2==15.0.0
 urllib3==1.26.14
-vcmsa==0.1.0
 wcwidth==0.2.6
 wheel==0.38.4
 zipp==3.12.0
