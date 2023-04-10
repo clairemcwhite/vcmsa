@@ -16,7 +16,7 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 
 # This is combat with patsy requirement removed
 from vcmsa.combat_vsmsa_mod import combat
-from transformer_infrastructure.feedback import remove_feedback_edges_old
+#from transformer_infrastructure.feedback import remove_feedback_edges_old
 
 # For networks
 import igraph
