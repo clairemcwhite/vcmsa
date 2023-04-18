@@ -10,6 +10,7 @@ This is an alpha version of the algorithm code that functions as a proof-of-conc
 
 
 [Project Github repo](https://github.com/clairemcwhite/vcmsa)
+
 [Colab notebook](https://colab.research.google.com/drive/1h8WcsMzi8pYr-O3jW03knt7ePcv22o-F?authuser=1#scrollTo=oVkGfduwiAkw)
 
 #### Authors
