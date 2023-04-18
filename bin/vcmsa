@@ -208,7 +208,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
        
         islands = G.connected_components(mode = "weak")
         for island in islands:
-             logging.debug("island", island) 
+             logging.debug("island %s", island) 
         #ic("G", G)
         
         #if exclude == True:
@@ -378,7 +378,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     if torch.cuda.is_available():
        index = faiss.index_cpu_to_gpu(res, 0, index)
     else:
-       print("KNN search significantly faster on a GPU")
+       logging.debug("KNN search significantly faster on a GPU")
 
     #print("index built")
     logging.info("Index built") 
@@ -388,7 +388,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     if k > 2048:
        k = 2048 
     D1, I1 =  index.search(hidden_states, k = k) 
-    print("D1", D1)
+    logging.debug("D1", D1)
     end = time()
     #print("time to search index", end - start)
     # Get KNN of each amino acid
@@ -418,7 +418,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
    
     for x in hitlist_all:
-       print("hitlist_all:", x)
+       logging.debug("hitlist_all: {}".format(x))
     #logging.info("got best hitlist")
 
   
@@ -433,7 +433,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
    
 
     for x in rbh_list:
-      print("rbh", x) 
+      logging.debug("rbh".format(x)) 
 
     #print("old_len", len( rbh_list))
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
@@ -459,11 +459,11 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     all_alternates_dict = {}
     clusters_list = []
     
-    print("Begin with only natural clusters")
-    cluster_list1 = []
-    cluster_list2 = []
-    cluster_list3 = []
-    cluster_list4 = []
+    #print("Begin with only natural clusters")
+    #cluster_list1 = []
+    #cluster_list2 = []
+    #cluster_list3 = []
+    #cluster_list4 = []
 
     if len(seqs) > 2:
         minclustsize = int(len(seqs)/2) + 1
@@ -507,7 +507,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
        
     clusters_list = [x for x in clusters_list if len(x) > 1]
     for x in clusters_list:
-        print("First clusters", x)
+        logging.debug("First clusters".format(x))
 
     # Why is dedup_clusters only used once? 
     new_clusters_list = dedup_clusters(clusters_list, G, minclustsize)
@@ -526,9 +526,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
              if len(clust) > 2:
                 too_small.append(clust)
     for x in clusters_filt:
-          print("First clusters with small removed", x)
+          logging.debug("First clusters with small removed {}".format(x))
     for x in too_small:
-          print("collected as too_small", x)
+          logging.debug("collected as too_small {}".format(x))
     #ic("Getting DAG of cluster orders, removing feedback loops")
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_filt, seqs_aas, gapfilling_attempt = 0, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seq_names, args = args)
 
@@ -584,7 +584,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                 alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
                 #ic("current {}, previous record {}".format(alignment.numassigned,most_complete_alignment.numassigned))
                 if alignment.numassigned < most_complete_alignment.numassigned:
-                    print("Replacing current alignment with previous more complete alignment")
+                    logging.debug("Replacing current alignment with previous more complete alignment")
 
                     alignment = most_complete_alignment
                 else:
@@ -606,7 +606,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
         # Do one or two rounds of clustering between guideposts
         if gapfilling_attempt in list(range(1, max_iterations, 2)):#  or gapfilling_attempt in [1, 2, 3, 4]:
-            print("Align by clustering within guideposts")
+            logging.info("Align by clustering within guideposts")
             # Don't allow modification of previous guideposts
             if gapfilling_attempt > 4:
                  apply_walktrap = True
@@ -616,7 +616,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                 # This removes 'stranded' amino acids, where neither the previous or next amino acid are placed adjacent. 
                 # If a good cluster, will be added right back
 
-               print("running address stranded")
+               logging.info("running address stranded")
                cluster_order, clustid_to_clust = address_stranded(alignment)
                alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names) 
                clusterlist = list(clustid_to_clust.values())
@@ -637,7 +637,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
         else:
             
-            print("Align by best match (looser)")
+            logging.info("Align by best match (looser)")
             logging.info("Add aa's to existing clusters")
             if gapfilling_attempt > 3:
               if gapfilling_attempt < 15: 
@@ -647,15 +647,15 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
-            print("starting looser")
+            logging.info("starting looser")
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, match_dict = fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = minclustsize, remove_both = True, match_dict= match_dict, seqnames = seq_names, args = args, I2 = I2)
-            print("looser complete")
+            logging.info("looser complete")
             too_small = []
 
 
         # THINGS TO DO AT THE END OF GAPFILLING CYCLE
         if alignment.numassigned > most_complete_alignment.numassigned:
-            print("This is the most complete alignment so far")
+            logging.info("This is the most complete alignment so far")
             most_complete_alignment = alignment
    
         outaln = "{}/{}.alignment_clustering_group_{}_gapfilling_{:04}.aln".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
@@ -837,7 +837,7 @@ if __name__ == '__main__':
             cluster_order, clustid_to_clust = clusts_from_alignment(alignment)
             squish = True
             if squish == True: 
-                print("attempt squish, merging adjacent non-overlapping clusters")       
+                logging.info("attempt squish, merging adjacent non-overlapping clusters")       
                 for rep in range(0,20):
                      prevclust = alignment
                      cluster_order, clustid_to_clust = squish_clusters(alignment, index, hidden_states, index_to_aa)                
