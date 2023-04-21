@@ -50,7 +50,6 @@ def get_align_args():
 
     parser.add_argument("-eout", "--emb_outfile", dest = "emb_outfile", type = str, required = False,
                         help="Path to save embeddings, optional. If not present, embeddings won't be saved")
-    
 
     parser.add_argument("-o", "--outfile", dest = "out_path", type = str, required = True,
                         help="Path to outfile")
@@ -68,7 +67,7 @@ def get_align_args():
                         help="Additionally exclude outlier sequences from final alignment")
 
     parser.add_argument("-l", "--layers", dest = "layers", nargs="+", type = int, default = [-16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1],
-                        help="Which layers (of 30 in protbert) to select default = -16 -15 -14 -13 -12 -11 -10 -9 -8 -7 -6 -5 -4 -3 -2 -1'")
+                        help="Which layers (of 25 in protbert) to select default = -16 -15 -14 -13 -12 -11 -10 -9 -8 -7 -6 -5 -4 -3 -2 -1'")
     parser.add_argument("-hd", "--heads", dest = "heads", type = str,
                         help="File will one head identifier per line, format layer1_head3")
 
@@ -93,6 +92,31 @@ def get_align_args():
 
     parser.add_argument("-l2", "--headnorm", dest = "headnorm",  action = "store_true", required = False, 
                         help="Take L2 normalization of each head")
+
+    parser.add_argument("-mnc", "--maximum_noncrossing", dest = "mnc", action='store_true',
+                        help="If flagged, perform maximum non-crossing")
+
+    parser.add_argument("-wmnc", "--weighted-maximum_noncrossing", dest = "wmnc", action='store_true',
+                        help="If flagged, perform weighted maximum non-crossing")
+
+    parser.add_argument("-ro", "--rbh_only", dest = "rbh_only", action='store_true',
+                        help="If flagged, stop after saving reciprocal best hit network (requires --rbh_outfile)")
+
+    parser.add_argument("-rout", "--rbh_outfile", dest = "rbh_outfile", type = str, required = False,
+                        help="Path to save reciprocal best hit network, optional. If not present, network won't be saved")
+
+    parser.add_argument("-mis", "--maximum_increasing_subsequence", dest = "mis", action='store_true',
+                        help="If flagged, perform maximum increasing subsequence")
+    
+    parser.add_argument("-bhf", "--best_hits_filtering", dest = "bhf",  type = str, required = False, default="rbh",
+                        help='How to filter best hits, default:"rbh"')
+
+    parser.add_argument("-so", "--sim_only", dest = "sim_only", action='store_true',
+                        help="If flagged, stop after calculating sequence similarities (requires --sim_outfile)")  
+    
+    parser.add_argument("-sout", "--sim_outfile", dest = "sim_outfile", type = str, required = False,
+                        help="Path to save sequence similarities, optional. If not present, sequence similarities won't be saved")  
+                        
     args = parser.parse_args()
 
     return(args)
@@ -130,6 +154,11 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
     sequence_array = np.array(sequence_embedding_list)
     numseqs = len(seqs)
     G, s_index = get_seqsims(sequence_array, k = numseqs)
+    print("printing sequence_array info: \n")
+    print(sequence_array)
+    print(len(sequence_array))
+    print(len(sequence_array[0]))
+    #print("printing sequence_array: \n", sequence_array)
     to_exclude = []
 
    
@@ -155,11 +184,12 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
         prev_to_exclude = to_exclude
         
 
-    
+        outputs_list  = []
         #ic("GG", G.vs()['name'])
         #ic("GG", G.es()['weight'])
         edgelist = []
         weightlist = []
+        print("printing to_exclude in initial loop: \n", to_exclude)
         for edge in G.es():
              if G.vs[edge.target]["name"] not in to_exclude:
                   if G.vs[edge.source]["name"] not in to_exclude:
@@ -172,6 +202,9 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
  
                              length_diff_correction = 1 - abs(0.5 - len(seqs[source]) / (len(seqs[source]) + len(seqs[target])))
                              corrected_weight = edge['weight'] * length_diff_correction
+                             outputs = ",".join([str(source),str(target), str(edge['weight']), str(len(seqs[source])), str(len(seqs[target])), str(corrected_weight)])
+                             outputs_list.append(outputs)
+                                    
                              #print("seqsim: ", source,target, edge['weight'], "l1, l2", len(seqs[source]), len(seqs[target]), corrected_weight)
                              if corrected_weight >= seqsim_thresh:
                              
@@ -181,6 +214,15 @@ def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_cluster
                              #    edgelist.append([ source, target ])
                              #    weightlist.append(0.0000001) # Because walktrap will fail on disconnected graphs until release of 0.10.3
                              #    print("adding", source, target)
+        if sim_outfile:
+            with open(sim_outfile, "w") as outfile:
+                print("PRINTING OUTPUT FILE")
+                outfile.write("seq1,seq2,seqsim,seqlen1,seqlen2,correctedseqsim\n")
+                for x in outputs_list:
+                    outfile.write("{}\n".format(x))
+        if sim_only:
+            #print("Quiting after saving embedding at {}".format(emb_outfile))
+            exit(0)
         # Rebuild G
         G = igraph.Graph.TupleList(edges=edgelist, directed=False)
         G.es['weight'] = weightlist
@@ -306,6 +348,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     Required args: record_dir, outfile_name, do_pca, headnorm
     Control for running whole alignment process
     """
+    fasta_path = args.fasta_path
+    # outfile_path =  os.path.dirname(outfile)     
+    # outfile_name =   os.path.splitext(os.path.basename(outfile))[0] # get outfile without extension
     pca_plot = args.pca_plot # default True
     headnorm = args.headnorm # default False
     record_dir = args.record_dir
@@ -322,6 +367,12 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     #ic("padded_seqlen", padded_seqlen)
     #ic(hstates_list.shape)
 
+    rbh_outfile = args.rbh_outfile
+    mis = args.mis
+    mnc = args.mnc
+    wmnc = args.wmnc
+    rbh_only = args.rbh_only
+    bhf = args.bhf
 
     logging.info("Flattening hidden states list")
     hidden_states = np.array(reshape_flat(hstates_list))  
@@ -347,7 +398,191 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
             do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
 
+    #return seqsim again after batch correction
+    #G_hidden_states, s_index = get_seqsims(hidden_states, k = numseqs)
 
+###############
+
+    # to_exclude = []
+    # if do_clustering == True:
+    #     #ic("fastgreedy")
+    #     #ic(G)
+    
+    #   repeat = True
+    #   while repeat == True:
+
+    #     group_hstates_list = []
+    #     cluster_seqnums_list = []
+    #     cluster_names_list = []
+    #     cluster_seqs_list = []
+ 
+    #     prev_to_exclude = to_exclude
+        
+
+    #     outputs_list  = []
+    #     #ic("GG", G.vs()['name'])
+    #     #ic("GG", G.es()['weight'])
+    #     edgelist = []
+    #     weightlist = []
+    #     print("printing to_exclude in initial loop: \n", to_exclude)
+    #     for edge in G_hidden_states.es():
+    #          if G_hidden_states.vs[edge.target]["name"] not in to_exclude:
+    #               if G_hidden_states.vs[edge.source]["name"] not in to_exclude:
+    #                  if edge['weight'] >= seqsim_thresh:
+    #                      #if edge.source != edge.target:
+    #                          source = G_hidden_states.vs[edge.source]["name"]
+    #                          target = G_hidden_states.vs[edge.target]["name"]
+                        
+ 
+ 
+    #                          #length_diff_correction = 1 - abs(0.5 - len(seqs[source]) / (len(seqs[source]) + len(seqs[target])))
+    #                          #corrected_weight = edge['weight'] * length_diff_correction
+    #                          corrected_weight = edge['weight']
+    #                          #outputs = ",".join([str(source),str(target), str(edge['weight']), str(len(seqs[source])), str(len(seqs[target])), str(corrected_weight)])
+    #                          outputs = ",".join([str(source),str(target), str(edge['weight']), str(corrected_weight)])
+
+    #                          outputs_list.append(outputs)
+                                    
+    #                          #print("seqsim: ", source,target, edge['weight'], "l1, l2", len(seqs[source]), len(seqs[target]), corrected_weight)
+    #                          if corrected_weight >= seqsim_thresh:
+                             
+    #                              edgelist.append([ source, target ])
+    #                              weightlist.append(corrected_weight)
+    #                          #else:
+    #                          #    edgelist.append([ source, target ])
+    #                          #    weightlist.append(0.0000001) # Because walktrap will fail on disconnected graphs until release of 0.10.3
+    #                          #    print("adding", source, target)
+    #     if sim_outfile:
+    #         print("printing type of sim_outfile: \n", type(sim_outfile))
+    #         with open(sim_outfile, "w") as outfile:
+    #             print("PRINTING OUTPUT FILE")
+    #             outfile.write("seq1,seq2,seqsim,seqlen1,seqlen2,correctedseqsim\n")
+    #             for x in outputs_list:
+    #                 outfile.write("{}\n".format(x))
+    #     # if sim_only:
+    #     #     #print("Quiting after saving embedding at {}".format(emb_outfile))
+    #     #     exit(0)
+    #     # Rebuild G
+    #     G_hidden_states = igraph.Graph.TupleList(edges=edgelist, directed=False)
+    #     G_hidden_states.es['weight'] = weightlist
+
+    #     G_hidden_states = G_hidden_states.simplify(combine_edges=max)
+    #     print(G_hidden_states)
+    #     islands = G_hidden_states.clusters(mode = "weak")
+    #     for island in islands:
+    #          print("island", island) 
+    #     first_members = [x[0] for x in islands]
+    #     # Artificially connect islands to avoid igraph error
+    #     print(first_members)
+    #     for x in first_members:
+    #        for y in first_members:
+    #           if x == y:
+    #             continue
+    #           else:
+    #             G_hidden_states.add_edge(x, y, weight = 0.0000001)
+    #     islands = G_hidden_states.clusters(mode = "weak")
+    #     for island in islands:
+    #          print("island", island) 
+    #     #ic("G", G)
+        
+    #     #if exclude == True:
+
+
+    #     seq_clusters = G_hidden_states.community_walktrap(steps = 3, weights = 'weight').as_clustering() 
+    #     if len(seq_clusters.subgraphs()) == len(G_hidden_states.vs()):
+    #          seq_clusters = G_hidden_states.clusters(mode = "weak") # walktrap can cluster nodes individually. See UBQ
+
+    #     #ic("After walktrap", seq_clusters)
+    #     for seq_cluster_G in seq_clusters.subgraphs():
+        
+    #             # Do exclusion within clusters
+    #             #ic("seq_clusters", seq_cluster_G)
+    #             if exclude == True:
+    
+    #                 clust_names = seq_cluster_G.vs()["name"]
+    #                 #ic("clust_names", clust_names)
+    #                 cluster_to_exclude = candidate_to_remove(seq_cluster_G, clust_names, z = -5)
+    #                 #ic(cluster_to_exclude)
+                       
+    #                 to_delete_ids_sub_G = [v.index for v in seq_cluster_G.vs if v['name'] in cluster_to_exclude]
+    #                 seq_cluster_G.delete_vertices(to_delete_ids_sub_G) 
+    
+    
+    #                 #ic("to_exclude_pre", to_exclude)
+    #                 to_exclude = to_exclude + cluster_to_exclude
+    #                 to_exclude = list(set(to_exclude))
+    #                 #ic("to_exclude_post", to_exclude)
+    #                 if to_exclude:       
+    #                     logging.info("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
+    #                     #ic("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
+    #             to_exclude = list(set(to_exclude))
+    #     #ic("eq check", to_exclude, prev_to_exclude)
+    #     if set(to_exclude) == set(prev_to_exclude):
+    #        repeat = False
+        
+               
+
+
+
+###############
+
+
+
+    # print("printing hidden states info: \n")
+    # print(hidden_states)
+    # print((hidden_states.shape))
+    # print(len(hidden_states[0]))
+    # exit(0)
+
+    # G_hidden_states, s_index = get_seqsims(hidden_states, k = numseqs)
+    # outputs_list  = []
+    # #ic("GG", G.vs()['name'])
+    # #ic("GG", G.es()['weight'])
+    # edgelist = []
+    # weightlist = []
+    # print("printing to_exclude: \n", to_exclude)
+    # for edge in G_hidden_states.es():
+    #         if G_hidden_states.vs[edge.target]["name"] not in to_exclude:
+    #             if G_hidden_states.vs[edge.source]["name"] not in to_exclude:
+    #                 if edge['weight'] >= seqsim_thresh:
+    #                     #if edge.source != edge.target:
+    #                         source = G_hidden_states.vs[edge.source]["name"]
+    #                         target = G_hidden_states.vs[edge.target]["name"]
+                    
+
+    #                         # print("printing len(seqs[source]): \n", len(seqs[source]))
+    #                         # print("printing seqs: \n", seqs)
+    #                         # print("printing len seqs: \n", len(seqs))
+    #                         # print("printing target: \n", target)
+    #                         # print("printing seqs[target]: \n", seqs[target])
+    #                         # print("printing len(seqs[target]): \n", len(seqs[target]))
+
+    #                         if target < len(seqs) and source < len(seqs):
+    #                             length_diff_correction = 1 - abs(0.5 - len(seqs[source]) / (len(seqs[source]) + len(seqs[target])))
+    #                             corrected_weight = edge['weight'] * length_diff_correction
+    #                         else:
+    #                             corrected_weight = edge['weight']
+    #                         # outputs = ",".join([str(source),str(target), str(edge['weight']), str(len(seqs[source])), str(len(seqs[target])), str(corrected_weight)])
+    #                         outputs = ",".join([str(source),str(target), str(edge['weight']), str(corrected_weight)])
+    #                         outputs_list.append(outputs)
+                                
+    #                         #print("seqsim: ", source,target, edge['weight'], "l1, l2", len(seqs[source]), len(seqs[target]), corrected_weight)
+    #                         if corrected_weight >= seqsim_thresh:
+                            
+    #                             edgelist.append([ source, target ])
+    #                             weightlist.append(corrected_weight)
+    #                         #else:
+    #                         #    edgelist.append([ source, target ])
+    #                         #    weightlist.append(0.0000001) # Because walktrap will fail on disconnected graphs until release of 0.10.3
+    #                         #    print("adding", source, target)
+    # if sim_outfile:
+    #     print("sim_outfile type: \n", type(sim_outfile))
+    #     new_out = sim_outfile + "post_bc"
+    #     with open(new_out, "w") as outfile:
+    #         print("PRINTING OUTPUT FILE")
+    #         outfile.write("seq1,seq2,seqsim,correctedseqsim\n")
+    #         for x in outputs_list:
+    #             outfile.write("{}\n".format(x))
 
 
     logging.info("maxlen padding removed")   
@@ -402,8 +637,63 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
     logging.info("get best hitlist")
     minscore1 = minscore1
-    hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
-   
+    hitlist_all = get_besthits(I2, minscore = 0.7) # No threshold for first clustering.
+    #new_hitdict = get_besthits(I2, minscore = 0.5) #added threshold of 0.5
+    new_hitdict = get_besthits(I2, minscore = 0)
+    print("printing new_hitdict: \n", new_hitdict)
+    graphs = []
+    for k,v in new_hitdict.items():
+        print("printing key")
+        print(k)
+        print("printing value")
+        print(v)
+        if bhf == "rbh":
+            new_rbh = get_rbhs(v)
+        elif bhf == "no_rbh":
+            new_rbh = v
+        print("first new_rbh")
+        print(new_rbh)
+
+        #add commandline argument to do with or without maximum increasing subsequence
+        #test should output final rbh list which we can then compare to gold standard
+        if mis == True:
+            new_rbh = maximum_increasing(new_rbh)
+            print("second new_rbh")
+            print(new_rbh)
+
+        #ic("new_rbh from get_rbh", new_rbh[0:5])
+        #rbh_dict[frozenset(scope_aas)] = new_rbh
+                 
+        #if mnc and wmnc flags are both on, perform weighted
+        if wmnc == True:
+            G = graph_from_hits_noncrossing(new_rbh, wmnc = wmnc)
+            print("doing weighted")
+            graphs.append(G) 
+        elif mnc == True:
+            G = graph_from_hits_noncrossing(new_rbh)
+            graphs.append(G)
+        else:
+            G = graph_from_rbh(new_rbh)
+            graphs.append(G)
+
+    #merge the graphs into one
+    G = igraph.union(graphs, byname=True)
+
+    #add commandline argument to stop here
+    if rbh_outfile:
+           with open(rbh_outfile, "a") as fOut:
+                for e in G.es:
+                    source_name = G.vs[e.source]['name']
+                    target_name = G.vs[e.target]['name']
+                    outstring = "{},{},{},{},{},{}\n".format(fasta_path, source_name.seqnum, target_name.seqnum, source_name, target_name, e['weight'])
+                    fOut.write(outstring)
+    if rbh_only:
+        exit(0)
+
+
+    print("printing G")
+    print(G)
+    #return(1)
     #for x in hitlist_all:
     #   #print("hitlist_all:", x)
     #logging.info("got best hitlist")
@@ -411,7 +701,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
   
     #logging.info("get reciprocal best hits")
     start = time() 
-    rbh_list = get_rbhs(hitlist_all)  
+    
+    #rbh_list = get_rbhs(hitlist_all)  
     end = time()
     #print(end - start)
 
@@ -424,27 +715,31 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
     #print("old_len", len( rbh_list))
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
-    rbh_list = maximum_increasing(rbh_list)
+    #rbh_list = maximum_increasing(rbh_list)
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
     #print("new_len", len(rbh_list))
     
 
-    outnet = "{}/{}.testnet_initial_clustering{}.csv".format(record_dir, outfile_name, alignment_group)
-    with open(outnet, "w") as outfile:
-          outfile.write("aa1,aa2,score\n")
-          for x in rbh_list:
-             outstring = "{},{},{}\n".format(x[0], x[1], x[2])        
-             outfile.write(outstring)
+    # outnet = "{}/{}.testnet_initial_clustering{}.csv".format(record_dir, outfile_name, alignment_group)
+    # with open(outnet, "w") as outfile:
+    #       outfile.write("aa1,aa2,score\n")
+    #       for x in rbh_list:
+    #          outstring = "{},{},{}\n".format(x[0], x[1], x[2])        
+    #          outfile.write(outstring)
 
 
     #ic("Start betweenness calculation to filter cluster-connecting amino acids. Also first round clustering")
 
-    G = graph_from_rbh(rbh_list, directed = False)
+    #G = graph_from_rbh(rbh_list, directed = False)
  
 
     clusters_list = []
     if len(seqs) > 2:
         minclustsize = int(len(seqs)/2) + 1
+        
+        #MINCLUSTSIZE CHANGE TO 0
+        #minclustsize=0
+
         #if len(clusters_list) == 0:
         #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
@@ -452,6 +747,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         #clusters_list = process_network(G, betweenness_cutoff = 0.1, apply_walktrap = True)
 
     else:
+        #MINCLUSTSIZE CHANGE TO 0
+        #minclustsize=0
         minclustsize = 2
         #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
@@ -472,17 +769,25 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     clusters_filt = []
     too_small = []
     for clust in new_clusters_list:
+        #MINCLUSTSIZE CHANGE TO 0
           if len(clust) >= minclustsize:
                 clusters_filt.append(clust)
           else:
              # This is ever happening?
              if len(clust) > 2:
                 too_small.append(clust)
+    print("too small after for loop: \n", too_small)
     #for x in clusters_filt:
           #ic("First clusters with small removed", x)
     #for x in too_small:
           #ic("collected as too_small", x)
     #ic("Getting DAG of cluster orders, removing feedback loops")
+    print('minclustsize: \n', minclustsize)
+    print('clusters_filt in vcmsa: \n', clusters_filt)
+    print('new_clusters_list in vcmsa: \n', new_clusters_list)
+    
+     #MINCLUSTSIZE CHANGE TO 0
+
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_filt, seqs_aas, gapfilling_attempt = 0, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seq_names, args = args)
 
     clusters_filt = list(clustid_to_clust.values())  
@@ -491,6 +796,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
           #ic("First clusters after feedback loop removal", x)
     alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
 
+    #MINCLUSTSIZE CHANGE TO 0
+    #minclustsize=0
     if len(seqnums) > 2:
        if len(seqnums) < 5:
             minclustsize = len(seqnums) - 1
@@ -517,8 +824,11 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
         logging.info("gapfilling_attempt {}".format(gapfilling_attempt))
         if gapfilling_attempt > 6 and minclustsize > 2 and gapfilling_attempt % 2 == 1:
                 minclustsize = minclustsize - 1
+                        #MINCLUSTSIZE CHANGE TO 0
+                #minclustsize=0
         #ic("This is the minclustsize", minclustsize)
          
+        print("too small: \n", too_small)
         unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid, too_small)
         #for x in unassigned:
            #ic("unassign", x)
@@ -574,6 +884,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
+            print("cluster_order in vcmsa: \n", cluster_order)
+            
+            #MINCLUSTSIZE CHANGE TO 0
 
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_rbh = fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, I2,  gapfilling_attempt, minscore = minscore ,minclustsize = minclustsize, ignore_betweenness = ignore_betweenness, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, seqnames = seq_names, args = args)
  
@@ -605,6 +918,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
+            
+            #MINCLUSTSIZE CHANGE TO 0
+
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, match_dict = fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = minclustsize, remove_both = True, match_dict= match_dict, seqnames = seq_names, args = args)
             too_small = []
             #cluster_order_merge, clustid_to_clust_merge, pos_to_clustid_merge, alignment)
@@ -652,17 +968,25 @@ if __name__ == '__main__':
     model_name = args.model_name
     emb_outfile = args.emb_outfile
     embed_only = args.embed_only
+    sim_outfile = args.sim_outfile
+    sim_only = args.sim_only
     pca_plot = args.pca_plot
     seqlimit = args.seqlimit
     headnorm = args.headnorm
     padding =args.padding
     seqsim_thresh  = args.seqsimthresh 
+    #set do_clustering to False for pca tests
     do_clustering = True
     cpu_only = args.cpu_only
     # get place to store output file
     outfile_path =  os.path.dirname(outfile)     
     outfile_name =   os.path.splitext(os.path.basename(outfile))[0] # get outfile without extension
-
+    rbh_outfile = args.rbh_outfile
+    mis = args.mis
+    mnc = args.mnc
+    wmnc = args.wmnc
+    rbh_only = args.rbh_only
+    bhf = args.bhf
 
     if outfile_path:
        record_dir = "{}/alignment_files_{}".format(outfile_path,outfile_name)
@@ -672,6 +996,10 @@ if __name__ == '__main__':
         shutil.rmtree(record_dir, ignore_errors=True)
     
     os.mkdir(record_dir)
+
+    if os.path.exists(rbh_outfile):
+        os.remove(rbh_outfile)
+
 
     args.outfile_name  = outfile_name
     args.record_dir = record_dir
@@ -720,6 +1048,16 @@ if __name__ == '__main__':
 
     else:
         seqlens = [len(x) for x in seqs]
+        print("printing model_name:")
+        print(model_name)
+        print("printing seq_lens")
+        print(seqlens)
+        print("printing layers")
+        print(layers)
+        print("printing padding")
+        print(padding)
+        print("printing headnames")
+        print(headnames)
         embedding_dict = get_embeddings(seqs_spaced,
                                     model_name,
                                     seqlens = seqlens,
@@ -729,6 +1067,8 @@ if __name__ == '__main__':
                                     padding = padding,
                                     heads = headnames,
                                     cpu_only = cpu_only)
+        print("THIS IS INPUT TO EMBEDDING DICT")
+        print(seqs_spaced)
         if emb_outfile:
            with open(emb_outfile, "wb") as fOut:
                pickle.dump(embedding_dict, fOut, protocol=pickle.HIGHEST_PROTOCOL)
