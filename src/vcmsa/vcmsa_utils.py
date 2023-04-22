@@ -178,17 +178,17 @@ def get_new_clustering_old(G, betweenness_cutoff = 0.10,  apply_walktrap = True,
             low_authority_nodes = [x[0] for x in hub_names if x[2]  <= 0.2]
             low_authority_node_ids = [x[1] for x in hub_names if x[2]  <= 0.2]
 
-            logging.debug("removing low authority_nodes".format(low_authority_nodes))
+            logging.debug("removing low authority_nodes {}".format(low_authority_nodes))
             #low_authority_nodes = []
             if len(low_authority_nodes) > 0 and len(high_authority_nodes) > 0:
-                logging.debug("before".format(G))
-                logging.debug([x for x in G.es()])
+                #logging.debug("before {}".format(G))
+                #logging.debug([x for x in G.es()])
 
                 logging.debug([x['name'] for x in G.vs()])
                 logging.debug(low_authority_nodes)
                 high_authority_edges =  G.es.select(_within = high_authority_nodes_vx)
                 #If not edges left after removing low authority nodes
-                logging.debug("high authority_edges".format(high_authority_edges))
+                logging.debug("high authority_edges {}".format(high_authority_edges))
                 logging.debug([x for x in high_authority_edges])
                 if len(high_authority_edges) > 0:
 
@@ -266,7 +266,7 @@ def make_alignment(cluster_order, seqnums, clustid_to_clust, seqnames):
     alignment = Alignment(alignment_lol, seqnames)
     str_alignment = alignment.str_formatted
     for row_str in str_alignment:
-       logging.debug("Align: ", row_str[0:170])
+       logging.debug("Align: {}".format(row_str[0:170]))
 
     return(alignment)
 
@@ -341,8 +341,8 @@ def get_seqs_aas(seqs, seqnums):
 def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize = 1, all_alternates_dict = {}, seqnames = [], args = None):
     
     seqnums = [x[0].seqnum for x in seqs_aas]
-    logging.debug("start organize clusters, during gapfilling attempt ", gapfilling_attempt)
-    logging.debug("clusters at start of organize", clusterlist)
+    logging.debug("start organize clusters, during gapfilling attempt {}".format(gapfilling_attempt))
+    logging.debug("clusters at start of organize {}".format(clusterlist))
 
     cluster_orders_dict, pos_to_clust, clustid_to_clust, dag_reached = clusters_to_dag(clusterlist, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
 
@@ -350,9 +350,9 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
     while dag_reached == False:
                     
           clusters_filt = list(clustid_to_clust.values())
-          logging.debug("dag_attempts", dag_attempts, clusters_filt)
+          logging.debug("dag_attempts {} {}".format(dag_attempts, clusters_filt))
           if len(clusters_filt) < 2:
-               logging.debug("Dag not reached, no edges left to remove".format(count))
+               logging.debug("Dag not reached, no edges left to remove. count {}".format(count))
                return(1)
           cluster_orders_dict, pos_to_clust, clustid_to_clust,  dag_reached = clusters_to_dag(clusters_filt, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
           dag_attempts = dag_attempts + 1
@@ -476,7 +476,7 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     numseqs = len(seqs_aas)
     logging.debug("get cluster dict")
     pos_to_clustid, clustid_to_clust = get_cluster_dict(clusters_filt)
-    logging.debug("from clusters_to_dag", clusters_filt)
+    logging.debug("from clusters_to_dag {}".format(clusters_filt))
     cluster_orders_dict = get_cluster_orders(pos_to_clustid, seqs_aas)
 
     # For each cluster that's removed, try adding it back one at a time an alternate conformation
@@ -598,10 +598,10 @@ def remove_feedback_edges2(cluster_orders_dict, clustid_to_clust, gapfilling_att
 
     #ic("feedback arc set")
     for x in fas:
-        logging.debug("arc", x)
+        logging.debug("arc {}".format(x))
 
     write_ordernet = True
-    logging.debug("gapfilling_attempt", gapfilling_attempt)
+    logging.debug("gapfilling_attempt {}".format(gapfilling_attempt))
     if write_ordernet == True: 
        
        outnet = "{}/{}.ordernet_{}_attempt-{}_gapfilling-{:04}.csv".format(record_dir, outfile_name, alignment_group, attempt, gapfilling_attempt)
@@ -617,7 +617,7 @@ def remove_feedback_edges2(cluster_orders_dict, clustid_to_clust, gapfilling_att
     dag_or_not = G_order.is_dag()
     #print(dag_or_not) 
 
-    logging.debug("removed clusters", to_remove_clustids)
+    logging.debug("removed clusters {}".format(to_remove_clustids))
 
     reduced_clusters = []
     for clustid, clust in clustid_to_clust.items():
@@ -631,11 +631,11 @@ def remove_feedback_edges2(cluster_orders_dict, clustid_to_clust, gapfilling_att
           if not clustid in to_remove_clustids:
               reduced_clusters.append(clust)
           else:
-              logging.debug("cluster removed", clust)
+              logging.debug("cluster removed {}".format(clust))
           #else:
           #    too_small_clusters.append(new_clust)
     for f in reduced_clusters:
-        logging.debug('reduced cluster', f)
+        logging.debug("reduced cluster {}".format(f))
     return(reduced_clusters)
 
 
@@ -686,17 +686,17 @@ def get_consensus_clust_path(clust, cluster_orders_dict, clustid):
           for i in range(len(path) - 1):
                if path[i] == clustid:
                     edge = "{},{}".format(path[i], path[i + 1])
-                    logging.debug("edge", edge)
+                    logging.debug("edge {}".format(edge))
                     paths[aa] = edge
        if len(paths.values()) > 0:             
            most_common_path, count = Counter(paths.values()).most_common(1)[0]
            if count >= 0.5 * len(clust):
                for aa, path in paths.items():
                    if path == most_common_path:
-                       logging.debug("keeping path", path)
+                       logging.debug("keeping path {}".format(path))
                        new_clust.append(aa) 
                    else:
-                       logging.debug("Removing aa", aa)
+                       logging.debug("Removing aa {}".format(aa))
 
        return(new_clust)
 
@@ -739,7 +739,7 @@ def remove_feedback_aas(cluster_orders_dict, clustid_to_clust, gapfilling_attemp
           path = cluster_orders_dict[aa.seqnum]
           #print("arc aa", aa, path, source_name, target_name)
           if contains([source_name, target_name], path):
-              logging.debug(aa, "is part of the feedback arc")
+              logging.debug("{} is part of the feedback arc".format(aa))
 
        new_source_clust = get_consensus_clust_path(source_clust, cluster_orders_dict, source_name)
        #print("pre_source_clust", source_clust)
@@ -750,7 +750,7 @@ def remove_feedback_aas(cluster_orders_dict, clustid_to_clust, gapfilling_attemp
           path = cluster_orders_dict[aa.seqnum]
           #print("arc aa", aa, path, source_name, target_name)
           if contains([source_name, target_name], path):
-              logging.debug(aa, "is part of the feedback arc")
+              logging.debug("{} is part of the feedback arc".format(aa))
        new_target_clust = get_consensus_clust_path(target_clust, cluster_orders_dict, target_name)
        #print("pre_target_clust", target_clust)
        #print("new_target_clust", new_target_clust)
@@ -801,8 +801,8 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
 
     #ic("feedback arc set")
     for x in fas:
-        logging.debug("arc", x)
-    logging.debug("gapfilling", gapfilling_attempt)
+        logging.debug("arc {}".format(x))
+    logging.debug("We're in gapfilling attempt {}".format(gapfilling_attempt))
     write_ordernet = True
     if write_ordernet == True:
 
@@ -841,14 +841,14 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
        # If one node in the feedback edges is significantly stronger (i.e. more incumbent edges"
        strength_source =  G_order.strength(edge.source, weights = "weight")
        strength_target =  G_order.strength(edge.target, weights = "weight")
-       logging.debug("STRENGTH source",  source_name, strength_source)
-       logging.debug("STRENGTH target", target_name, strength_target)
+       logging.debug("STRENGTH source {} {}".format(source_name, strength_source))
+       logging.debug("STRENGTH target {} {}".format(target_name, strength_target))
        if strength_source >= 2* strength_target:
-             logging.debug("keeping ", source_name)
+             logging.debug("keeping {}".format(source_name))
              to_remove_clustids.append(target_name)
              #removed_edges.append((None, edge.target, None, target_name))
        elif strength_target >= 2* strength_source:
-             logging.debug("keeping ", target_name)
+             logging.debug("keeping {}".format(target_name))
              to_remove_clustids.append(source_name)
              #removed_edges.append((edge.source, None , source_name, None))
        #elif len(clustid_to_clust[source_name]) < len(clustid_to_clust[target_name]):
@@ -886,10 +886,10 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
              G_order.delete_edges([removed_edge[0:2]])
              to_remove.append(removed_edge[2:4]) # list of clustid pairs 
 
-    logging.debug("to_remove", to_remove)
+    logging.debug("to_remove {}".format(to_remove))
     for x in to_remove:
         for clustid in x:
-           logging.debug("removing after feedback", clustid, clustid_to_clust[clustid])
+           logging.debug("removing after feedback {} {}".format(clustid, clustid_to_clust[clustid]))
            to_remove_clustids.append(clustid)
     remove_dict = {}
 
@@ -949,9 +949,9 @@ def remove_feedback_edges(cluster_orders_dict, clustid_to_clust, gapfilling_atte
     #print("final remove_dict", remove_dict)
     #ic("Doing remove")
     reduced_clusters = []
-    logging.debug("removed_clustids from before remove dict", to_remove_clustids)
+    logging.debug("removed_clustids from before remove dict {}".format(to_remove_clustids))
     #removed_clustids = removed_clustids + list(flatten(list(remove_dict.values())))
-    logging.debug("final removed_clustids", to_remove_clustids)
+    logging.debug("final removed_clustids {}".format(to_remove_clustids))
     for clustid, clust in clustid_to_clust.items():
           new_clust = []
           #if clustid in to_remove: #removed_clustids: CHANGED here
@@ -1467,7 +1467,7 @@ def get_looser_scores(aa, index, hidden_states):
      '''Get all scores with a particular amino acid'''
      start  = time()
      hidden_state_aa = np.take(hidden_states, [aa.index], axis = 0)
-     logging.debug("np.take time", time() - start)
+     logging.debug("np.take time {}".format(time() - start))
      # Search the total number of amino acids
      n_aa = hidden_states.shape[0]
 
@@ -1496,7 +1496,7 @@ def get_set_of_scores(gap_aa, index, hidden_states, index_to_aa):
     start = time()
     candidates = get_looser_scores(gap_aa, index, hidden_states)
     end = time()
-    logging.debug("search time", end-start)
+    logging.debug("search time {}".format(end-start))
     candidates_aa = []
     for score in candidates:
         try:
@@ -1569,10 +1569,10 @@ def address_stranded(alignment):
          
          for aa in currclust:
              if aa.prevaa not in prevclust and aa.nextaa not in nextclust:
-                  logging.debug("remove_stranding: cluster ", i, aa,  aa.prevaa, aa.nextaa,prevclust,nextclust)
+                  logging.debug("remove_stranding: cluster {} {} {} {} {} {}".format(i, aa,  aa.prevaa, aa.nextaa,prevclust,nextclust))
                  
-                  logging.debug("cluster ", i,  aa.prevaa, aa.nextaa,prevclust,nextclust)
-                  logging.debug(aa, "in clust", currclust, "is stranded")
+                  logging.debug("cluster {} {} {} {} {}".format(i,  aa.prevaa, aa.nextaa,prevclust,nextclust))
+                  logging.debug("{} in clust {} is stranded".format(aa, currclust))
                   logging.debug("removing")
                   removeclust = True
 
@@ -1580,7 +1580,7 @@ def address_stranded(alignment):
              new_cluster_order.append(currclustid)
              new_clustid_to_clust[currclustid] = currclust
          else:
-             logging.debug("Found stranding, Removing stranded clust", currclust)
+             logging.debug("Found stranding, Removing stranded clust {}".format(currclust))
     return(new_cluster_order, new_clustid_to_clust)
 
 
@@ -1601,9 +1601,9 @@ def first_clustering(G,  betweenness_cutoff = .10, ignore_betweenness = False, a
     '''
 
     logging.debug("Start first clustering")
-    logging.debug("pos_to_clustid", pos_to_clustid)
+    logging.debug("pos_to_clustid {}".format(pos_to_clustid))
     # Islands in the RBH graph
-    logging.debug(betweenness_cutoff, ignore_betweenness, apply_walktrap)
+    logging.debug("{} {} {}".format(betweenness_cutoff, ignore_betweenness, apply_walktrap))
     islands = G.connected_components(mode = "weak")
     new_subgraphs = []
     cluster_list = []
@@ -1614,7 +1614,7 @@ def first_clustering(G,  betweenness_cutoff = .10, ignore_betweenness = False, a
 
     # Natural clusters
     for sub_G in islands.subgraphs():
-        logging.debug("sub_G", sub_G)
+        logging.debug("sub_G".format(sub_G))
         # Don't remove edges if G = size 2
         if len(sub_G.vs()) < 4:
                betweenness_cutoff = 1
@@ -1632,7 +1632,7 @@ def first_clustering(G,  betweenness_cutoff = .10, ignore_betweenness = False, a
             new_clusters, alternates_dict = get_new_clustering_old(sub_sub_G, betweenness_cutoff = betweenness_cutoff,  apply_walktrap = apply_walktrap, pos_to_clustid = pos_to_clustid)
             if alternates_dict:
                  all_alternates_dict = {**all_alternates_dict, **alternates_dict}
-            logging.debug("get_new_clustering", new_clusters)
+            logging.debug("get_new_clustering".format(new_clusters))
             #ic("first_clustering:adding", new_clusters, "to cluster_list")
             cluster_list = cluster_list + new_clusters
 
@@ -1759,11 +1759,11 @@ def delete_low_authority(G):
       high_authority_nodes_vx = [x[1] for x in high_authority]
       
 
-      logging.debug("high authority", high_authority_nodes)
+      logging.debug("high authority".format(high_authority_nodes))
       low_authority_nodes = [x for x in names if x not in high_authority_nodes]   #[x[0] for x in hub_names if x[2]  <= 0.2]
       low_authority_node_ids = [x for x in indices if x not in high_authority_nodes_vx]  # [x[1] for x in hub_names if x[2]  <= 0.2]
 
-      logging.debug("low authority", low_authority_nodes)
+      logging.debug("low authority".format(low_authority_nodes))
       
       if len(low_authority_nodes) > 0 and len(high_authority_nodes) > 0:
           high_authority_edges =  G.es.select(_within = high_authority_nodes_vx)
@@ -1944,7 +1944,7 @@ def process_connected_set(connected_set, G, dup_thresh = 1.2,  betweenness_cutof
     2) If so, remove high betweenness nodes, and check for completeness again
     3) If it's not very duplicated, removed any duplicates by best score
     '''
-    logging.debug("process_connected_set: betweenness", betweenness_cutoff, "dup_thresh", dup_thresh)
+    logging.debug("process_connected_set: betweenness {} dup_thresh {}".format(betweenness_cutoff, dup_thresh))
     new_clusters = []
     all_alternates_dict = {}
     min_dupped =  min_dup(connected_set, dup_thresh)
@@ -2101,10 +2101,10 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
      
        for vertex in sub_G.vs():
            vertex_neighbors = sub_G.neighbors(vertex)
-           logging.debug("vertex, neighbors", vertex, vertex_neighbors)
+           logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
            neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
-       logging.debug("name     " ,sub_G.vs()['name'])
-       logging.debug("neighbors", neighbors)
+       logging.debug("name     {}".format(sub_G.vs()['name']))
+       logging.debug("neighbors {}".format(neighbors))
 
        address_time = time()
 
@@ -2337,7 +2337,7 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
 
         # TEST CHANGE
         new_clusters, all_alternates_dict  = first_clustering(G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap, pos_to_clustid = pos_to_clustid )
-        logger.debug("new_clusters_old_function", new_clusters)
+        logger.debug("new_clusters_old_function {}".format(new_clusters))
         for x in new_clusters:
             logger.debug("address_unassigned_aas:new_clusters {}".format(x))
        
@@ -2380,7 +2380,7 @@ def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_
     unassigned = format_gaps(unassigned, max(clustid_to_clust.keys()))
 
     for gap in unassigned:
-        logging.debug("gap", gap)
+        logging.debug("gap {}".format(gap))
         starting_clustid =  gap[0]
         ending_clustid = gap[2]
         #print(gap)
@@ -2419,7 +2419,7 @@ def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_
                 # Fast
                 #print("get_best_matches", time() - start)
                 if output:
-                   logging.debug("output", output)
+                   logging.debug("output {}".format(output))
                    gap_matches.append(output)
             matches = matches + gap_matches
             match_dict[already_searched] = gap_matches
@@ -2759,7 +2759,7 @@ def remove_doubles_by_consistency_old(cluster, pos_to_clustid, add_back = True):
         target_aas = [x for x in cluster if x.seqnum == seqnum]
         consistent_ones = []
         for aa in target_aas:
-            logging.debug(aa, cluster_minus_targets)
+            logging.debug("{} {}".format(aa, cluster_minus_targets))
             if consistency_check ( [aa] + cluster_minus_targets, pos_to_clustid ) == True:
                 consistent_ones.append(aa)
         # Add back in consistent to cluster     
@@ -2800,13 +2800,13 @@ def remove_doubles_by_consistency(cluster, pos_to_clustid, add_back = True):
            max_num_consistent = 0
            if found_true == False:
                for aa in target_aas:
-                 logging.debug(aa, cluster_minus_targets)
+                 logging.debug("{} {}".format(aa, cluster_minus_targets))
                  prevlist, nextlist = get_prepost(cluster_minus_targets, pos_to_clustid)    
-                 logging.debug(prevlist, nextlist)
-                 logging.debug("prevlist status", prevlist)
+                 logging.debug("{} {}".format(prevlist, nextlist))
+                 logging.debug("prevlist status {}".format(prevlist))
                  check_results, num_consistent =  consistency_check2 (aa, prevlist, nextlist, diversity = i, pos_to_clustid = pos_to_clustid)
                  if check_results == True and num_consistent >= max_num_consistent :
-                    logging.debug(aa, num_consistent)
+                    logging.debug("{} {}".format(aa, num_consistent))
                     consistent_ones.append(aa)
                     max_num_consistent = num_consistent
                     found_true = True
@@ -2828,8 +2828,8 @@ def remove_doubles_by_consistency(cluster, pos_to_clustid, add_back = True):
 #@profile
 
 def consistency_check2(aa, prevlist, nextlist, diversity= 1, pos_to_clustid = {}):
-        logging.debug("starting", prevlist)
-        logging.debug("starting", nextlist)
+        logging.debug("starting {}".format(prevlist))
+        logging.debug("starting {}".format(nextlist))
 
         prevset = set(prevlist)
         nextset = set(nextlist) 
@@ -2844,11 +2844,11 @@ def consistency_check2(aa, prevlist, nextlist, diversity= 1, pos_to_clustid = {}
                  nextlist.append(pos_to_clustid[aa.nextaa])   
              nextset.add(pos_to_clustid[aa.nextaa])
 
-        logging.debug("ending", prevlist)
-        logging.debug("ending", nextlist)
+        logging.debug("ending {}".format(prevlist))
+        logging.debug("ending {}".format(nextlist))
 
         num_consistent = 0
-        logging.debug("consistency_check", aa, aa.prevaa, aa.nextaa,  prevset, nextset, diversity)
+        logging.debug("consistency_check {} {} {} {} {} {}".format(aa, aa.prevaa, aa.nextaa,  prevset, nextset, diversity))
         results = False
         if len(prevset) <= diversity:
            results = True
