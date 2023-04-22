@@ -56,7 +56,6 @@ def get_align_args():
 
     parser.add_argument("-eout", "--emb_outfile", dest = "emb_outfile", type = str, required = False,
                         help="Path to save embeddings, optional. If not present, embeddings won't be saved")
-    
 
     parser.add_argument("-o", "--outfile", dest = "out_path", type = str, required = True,
                         help="Path to outfile")
@@ -74,7 +73,7 @@ def get_align_args():
                         help="Additionally exclude outlier sequences from final alignment")
 
     parser.add_argument("-l", "--layers", dest = "layers", nargs="+", type = int, default = [-16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1],
-                        help="Which layers (of 30 in protbert) to select default = -16 -15 -14 -13 -12 -11 -10 -9 -8 -7 -6 -5 -4 -3 -2 -1'")
+                        help="Which layers (of 25 in protbert) to select default = -16 -15 -14 -13 -12 -11 -10 -9 -8 -7 -6 -5 -4 -3 -2 -1'")
     parser.add_argument("-hd", "--heads", dest = "heads", type = str,
                         help="File will one head identifier per line, format layer1_head3")
 
@@ -101,7 +100,30 @@ def get_align_args():
     parser.add_argument("-l2", "--headnorm", dest = "headnorm",  action = "store_true", required = False, 
                         help="Take L2 normalization of each head")
 
+    parser.add_argument("-mnc", "--maximum_noncrossing", dest = "mnc", action='store_true',
+                        help="If flagged, perform maximum non-crossing")
 
+    parser.add_argument("-wmnc", "--weighted-maximum_noncrossing", dest = "wmnc", action='store_true',
+                        help="If flagged, perform weighted maximum non-crossing")
+
+    parser.add_argument("-ro", "--rbh_only", dest = "rbh_only", action='store_true',
+                        help="If flagged, stop after saving reciprocal best hit network (requires --rbh_outfile)")
+
+    parser.add_argument("-rout", "--rbh_outfile", dest = "rbh_outfile", type = str, required = False,
+                        help="Path to save reciprocal best hit network, optional. If not present, network won't be saved")
+
+    parser.add_argument("-mis", "--maximum_increasing_subsequence", dest = "mis", action='store_true',
+                        help="If flagged, perform maximum increasing subsequence")
+    
+    parser.add_argument("-bhf", "--best_hits_filtering", dest = "bhf",  type = str, required = False, default="rbh",
+                        help='How to filter best hits, default:"rbh"')
+
+    parser.add_argument("-so", "--sim_only", dest = "sim_only", action='store_true',
+                        help="If flagged, stop after calculating sequence similarities (requires --sim_outfile)")  
+    
+    parser.add_argument("-sout", "--sim_outfile", dest = "sim_outfile", type = str, required = False,
+                        help="Path to save sequence similarities, optional. If not present, sequence similarities won't be saved")  
+                        
     args = parser.parse_args()
 
     return(args)
@@ -139,6 +161,11 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
     sequence_array = np.array(sequence_embedding_list, dtype="float32")
     numseqs = len(seqs)
     G, s_index = get_seqsims(sequence_array, k = numseqs)
+    print("printing sequence_array info: \n")
+    print(sequence_array)
+    print(len(sequence_array))
+    print(len(sequence_array[0]))
+    #print("printing sequence_array: \n", sequence_array)
     to_exclude = []
 
    
@@ -164,11 +191,12 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
         prev_to_exclude = to_exclude
         
 
-    
+        outputs_list  = []
         #ic("GG", G.vs()['name'])
         #ic("GG", G.es()['weight'])
         edgelist = []
         weightlist = []
+        print("printing to_exclude in initial loop: \n", to_exclude)
         for edge in G.es():
              if G.vs[edge.target]["name"] not in to_exclude:
                   if G.vs[edge.source]["name"] not in to_exclude:
@@ -181,10 +209,21 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
                              length_diff_correction = 1 - abs(0.5 - len(seqs[source]) / (len(seqs[source]) + len(seqs[target])))
                              corrected_weight = edge['weight'] * length_diff_correction
                              logging.debug("seqsim: {} {} {} {} {} {}".format(source,target, edge['weight'], len(seqs[source]), len(seqs[target]), corrected_weight))
+                             outputs = ",".join([str(source),str(target), str(edge['weight']), str(len(seqs[source])), str(len(seqs[target])), str(corrected_weight)])
+                             outputs_list.append(outputs)
                              if corrected_weight >= seqsim_thresh:
                              
                                  edgelist.append([ source, target ])
                                  weightlist.append(corrected_weight)
+        if sim_outfile:
+            with open(sim_outfile, "w") as outfile:
+                outfile.write("seq1,seq2,seqsim,seqlen1,seqlen2,correctedseqsim\n")
+                for x in outputs_list:
+                    outfile.write("{}\n".format(x))
+        if sim_only:
+            print("Quiting after saving sequence similarities at {}".format(outfile))
+            exit(0)
+
         # Rebuild G
         G = igraph.Graph.TupleList(edges=edgelist, directed=False)
         G.es['weight'] = weightlist
@@ -311,22 +350,27 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     Required args: record_dir, outfile_name, do_pca, headnorm
     Control for running whole alignment process
     """
+    fasta_path = args.fasta_path
+    # outfile_path =  os.path.dirname(outfile)     
+    # outfile_name =   os.path.splitext(os.path.basename(outfile))[0] # get outfile without extension
     pca_plot = args.pca_plot # default True
     headnorm = args.headnorm # default False
     record_dir = args.record_dir
     outfile_name = args.outfile_name
     batch_correct = args.batch_correct
     seqlens = [len(x) for x in seqs]
-    #ic("seqs", seqs, seqlens)
     max_iterations = args.max_iterations # default 100
     cpu_only = args.cpu_only 
     numseqs = len(seqs)
     padded_seqlen = hstates_list.shape[1]
     embedding_length = hstates_list.shape[2]
-    #ic("numseqs", numseqs)
-    #ic("padded_seqlen", padded_seqlen)
-    #ic(hstates_list.shape)
 
+    rbh_outfile = args.rbh_outfile
+    mis = args.mis
+    mnc = args.mnc
+    wmnc = args.wmnc
+    rbh_only = args.rbh_only
+    bhf = args.bhf
 
     logging.info("Flattening hidden states list")
     hidden_states = np.array(reshape_flat(hstates_list), dtype="float32")
@@ -352,10 +396,6 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             png_hidden_out = "{}/{}.alignment_group{}.postbatch.png".format(record_dir, outfile_name, alignment_group)
             do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
-
-
-
-
     logging.info("maxlen padding removed")   
     #print("maxlen padding removed")
 
@@ -364,14 +404,13 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
         do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
     faiss.normalize_L2(hidden_states)
-    #print("hidden states normalized")
 
 
 
     index= build_index_flat(hidden_states, scoretype = "cosinesim", normalize_l2 = False) # Already normalized
 
     res = faiss.StandardGpuResources()  # use a single GPU
-    #print("Cuda available?", torch.cuda.is_available())
+    print("Cuda available?", torch.cuda.is_available())
 
     if torch.cuda.is_available():
        index = faiss.index_cpu_to_gpu(res, 0, index)
@@ -386,43 +425,77 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     if k > 2048:
        k = 2048 
     D1, I1 =  index.search(hidden_states, k = k) 
-    logging.debug("D1".format(D1))
+    #logging.debug("D1".format(D1))
     end = time()
-    #print("time to search index", end - start)
-    # Get KNN of each amino acid
-    #start = time()
-    #D1, I1 =  index.search(hidden_states, k = numseqs*20) 
-    #end = time()
-    #print("time to search index", end - start)
-
-    #  setup a logger that works in importe 
-    #print("KNN done") 
     logging.info("KNN done")
     start = time()
-    # Quite slow 
-    #print(k)
-    #print(D1)
-    #print(D1.shape)
-    #return(0)
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
     end = time()
-    #print("time to split", end-start)
-    #print(I2)
     # I2 is a dictionary of dictionaries of each aa1: { 1: [[aa1:1.0], [aa2:0.8]}
     logging.info("Split results into proteins done")
 
     logging.info("get best hitlist")
     minscore1 = minscore1
-    hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
-   
-    for x in hitlist_all:
-       logging.debug("hitlist_all: {}".format(x))
-    #logging.info("got best hitlist")
 
-  
-    #logging.info("get reciprocal best hits")
+    #hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
+    # 
+    #for x in hitlist_all:
+    #   logging.debug("hitlist_all: {}".format(x))
+    hitlist_all = get_besthits(I2, minscore = 0.7) # No threshold for first clustering? Change to zero 
+    #new_hitdict = get_besthits(I2, minscore = 0.5) #added threshold of 0.5
+    new_hitdict = get_besthits(I2, minscore = 0)
+    print("printing new_hitdict: \n", new_hitdict)
+    graphs = []
+    for k,v in new_hitdict.items():
+        #print("printing key")
+        #print(k)
+        #print("printing value")
+        #print(v)
+        if bhf == "rbh":
+            new_rbh = get_rbhs(v)
+        elif bhf == "no_rbh":
+            new_rbh = v
+        print("first new_rbh")
+        print(new_rbh)
+
+        #add commandline argument to do with or without maximum increasing subsequence
+        #test should output final rbh list which we can then compare to gold standard
+        if mis == True:
+            new_rbh = maximum_increasing(new_rbh)
+            print("second new_rbh")
+            print(new_rbh)
+
+                 
+        #if mnc and wmnc flags are both on, perform weighted
+        if wmnc == True:
+            G = graph_from_hits_noncrossing(new_rbh, wmnc = wmnc)
+            print("doing weighted maximum non crossing")
+            graphs.append(G) 
+        elif mnc == True:
+            G = graph_from_hits_noncrossing(new_rbh)
+            graphs.append(G)
+        else:
+            G = graph_from_rbh(new_rbh)
+            graphs.append(G)
+
+    #merge the graphs into one
+    G = igraph.union(graphs, byname=True)
+
+    #add commandline argument to stop here
+    if rbh_outfile:
+           with open(rbh_outfile, "a") as fOut:
+                for e in G.es:
+                    source_name = G.vs[e.source]['name']
+                    target_name = G.vs[e.target]['name']
+                    outstring = "{},{},{},{},{},{}\n".format(fasta_path, source_name.seqnum, target_name.seqnum, source_name, target_name, e['weight'])
+                    fOut.write(outstring)
+    if rbh_only:
+        exit(0)
+
+
     start = time() 
-    rbh_list = get_rbhs(hitlist_all)  
+    
+    #rbh_list = get_rbhs(hitlist_all)  
     end = time()
     #print(end - start)
 
@@ -433,26 +506,21 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     for x in rbh_list:
       logging.debug("rbh".format(x)) 
 
-    #print("old_len", len( rbh_list))
-    #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
-    # ADD control option here
-    rbh_list = maximum_increasing(rbh_list)
-     
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
     #print("new_len", len(rbh_list))
     
 
-    outnet = "{}/{}.testnet_initial_clustering{}.csv".format(record_dir, outfile_name, alignment_group)
-    with open(outnet, "w") as outfile:
-          outfile.write("aa1,aa2,score\n")
-          for x in rbh_list:
-             outstring = "{},{},{}\n".format(x[0], x[1], x[2])        
-             outfile.write(outstring)
+    # outnet = "{}/{}.testnet_initial_clustering{}.csv".format(record_dir, outfile_name, alignment_group)
+    # with open(outnet, "w") as outfile:
+    #       outfile.write("aa1,aa2,score\n")
+    #       for x in rbh_list:
+    #          outstring = "{},{},{}\n".format(x[0], x[1], x[2])        
+    #          outfile.write(outstring)
 
 
     #ic("Start betweenness calculation to filter cluster-connecting amino acids. Also first round clustering")
 
-    G = graph_from_rbh(rbh_list, directed = False)
+    #G = graph_from_rbh(rbh_list, directed = False)
  
     all_alternates_dict = {}
     clusters_list = []
@@ -465,6 +533,10 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
     if len(seqs) > 2:
         minclustsize = int(len(seqs)/2) + 1
+        
+        #MINCLUSTSIZE CHANGE TO 0
+        #minclustsize=0
+
         #if len(clusters_list) == 0:
         #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
@@ -482,6 +554,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
         #cluster_list4, G = first_clustering2(G, natural = False, remove_low_authority = True)
         #print("cluster_list4", cluster_list4)
     else:
+        #MINCLUSTSIZE CHANGE TO 0
+        #minclustsize=0
         minclustsize = 2
         #clusters_list = consistency_clustering(G, minclustsize = 0, dup_thresh = 1):
         #if len(clusters_list) == 0:
@@ -517,6 +591,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     clusters_filt = []
     too_small = []
     for clust in new_clusters_list:
+        #MINCLUSTSIZE CHANGE TO 0
           if len(clust) >= minclustsize:
                 clusters_filt.append(clust)
           else:
@@ -527,15 +602,20 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
           logging.debug("First clusters with small removed {}".format(x))
     for x in too_small:
           logging.debug("collected as too_small {}".format(x))
-    #ic("Getting DAG of cluster orders, removing feedback loops")
+    #for x in clusters_filt:
+          #ic("First clusters with small removed", x)
+    #for x in too_small:
+          #ic("collected as too_small", x)
+    #MINCLUSTSIZE CHANGE TO 0
+
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_filt, seqs_aas, gapfilling_attempt = 0, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seq_names, args = args)
 
     clusters_filt = list(clustid_to_clust.values())  
 
-    #for x in clusters_filt:
-          #ic("First clusters after feedback loop removal", x)
     alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
 
+    #MINCLUSTSIZE CHANGE TO 0?
+    #minclustsize=0
     if len(seqnums) > 2:
        if len(seqnums) < 5:
             minclustsize = len(seqnums) - 1
@@ -561,8 +641,11 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
         logging.info("Main gapfilling_attempt {}".format(gapfilling_attempt))
         if gapfilling_attempt > 6 and minclustsize > 2 and gapfilling_attempt % 2 == 1:
                 minclustsize = minclustsize - 1
+                        #MINCLUSTSIZE CHANGE TO 0
+                #minclustsize=0
         #ic("This is the minclustsize", minclustsize)
          
+        print("too small: \n", too_small)
         unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid, too_small)
         #for x in unassigned:
            #ic("unassign", x)
@@ -648,6 +731,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             logging.info("starting looser")
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, match_dict = fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = minclustsize, remove_both = True, match_dict= match_dict, seqnames = seq_names, args = args, I2 = I2)
             logging.info("looser complete")
+
             too_small = []
 
 
@@ -693,18 +777,26 @@ if __name__ == '__main__':
     model_name = args.model_name
     emb_outfile = args.emb_outfile
     embed_only = args.embed_only
+    sim_outfile = args.sim_outfile
+    sim_only = args.sim_only
     pca_plot = args.pca_plot
     seqlimit = args.seqlimit
     headnorm = args.headnorm
     padding =args.padding
     seqsim_thresh  = args.seqsimthresh 
+    #set do_clustering to False for pca tests
     do_clustering = True
     loglevel = args.loglevel
     cpu_only = args.cpu_only
     # get place to store output file
     outfile_path =  os.path.dirname(outfile)     
     outfile_name =   os.path.splitext(os.path.basename(outfile))[0] # get outfile without extension
-
+    rbh_outfile = args.rbh_outfile
+    mis = args.mis
+    mnc = args.mnc
+    wmnc = args.wmnc
+    rbh_only = args.rbh_only
+    bhf = args.bhf
 
     if outfile_path:
        record_dir = "{}/alignment_files_{}".format(outfile_path,outfile_name)
@@ -714,6 +806,10 @@ if __name__ == '__main__':
         shutil.rmtree(record_dir, ignore_errors=True)
     
     os.mkdir(record_dir)
+
+    if os.path.exists(rbh_outfile):
+        os.remove(rbh_outfile)
+
 
     args.outfile_name  = outfile_name
     args.record_dir = record_dir
@@ -760,6 +856,16 @@ if __name__ == '__main__':
 
     else:
         seqlens = [len(x) for x in seqs]
+        print("printing model_name:")
+        print(model_name)
+        print("printing seq_lens")
+        print(seqlens)
+        print("printing layers")
+        print(layers)
+        print("printing padding")
+        print(padding)
+        print("printing headnames")
+        print(headnames)
         embedding_dict = get_embeddings(seqs_spaced,
                                     model_name,
                                     seqlens = seqlens,
@@ -770,7 +876,6 @@ if __name__ == '__main__':
                                     heads = headnames,
                                     cpu_only = cpu_only, 
                                     half = False)
-
         if emb_outfile:
            with open(emb_outfile, "wb") as fOut:
                pickle.dump(embedding_dict, fOut, protocol=pickle.HIGHEST_PROTOCOL)

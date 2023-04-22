@@ -53,6 +53,11 @@ from collections import Counter, OrderedDict
 import logging
 from time import time
 
+
+# for batch correction 
+from sklearn import preprocessing
+from harmony import harmonize
+
 ###############################
 ### Classes
 class AA:
@@ -345,7 +350,8 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
     logging.debug("clusters at start of organize {}".format(clusterlist))
 
     cluster_orders_dict, pos_to_clust, clustid_to_clust, dag_reached = clusters_to_dag(clusterlist, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
-
+    #GETTinG EMPTY CLUSTERLIST
+    print("clusterlist: \n", clusterlist)
     dag_attempts = 1
     while dag_reached == False:
                     
@@ -358,6 +364,12 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
           dag_attempts = dag_attempts + 1
 
     cluster_order, clustid_to_clust, pos_to_clustid =  dag_to_cluster_order(list(cluster_orders_dict.values()), seqs_aas, pos_to_clust, clustid_to_clust)
+
+
+    #GETTING EMPTY CLUSTER ORDER
+    print("cluster order: \n", cluster_order)
+    print("clustid_to_clust : \n", clustid_to_clust)
+
     alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seqnames)
 
     return(cluster_order, clustid_to_clust, pos_to_clustid, alignment)
@@ -473,6 +485,8 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     # For getting consensus cluster order
     dag_reached = False
     #ic("status of remove_both", remove_both)
+    #CLUSTERS ARE ALREADY EMPTY AT BEGINNING OF THIS FCN
+    print('clusters_filt at beginning of clusters_to_dag: \n', clusters_filt)
     numseqs = len(seqs_aas)
     logging.debug("get cluster dict")
     pos_to_clustid, clustid_to_clust = get_cluster_dict(clusters_filt)
@@ -986,16 +1000,66 @@ def reshape_flat(hstates_list):
 
 #@profile
 def do_batch_correct(hidden_states, levels, batch_list):
-    hidden_states_pd = pd.DataFrame(hidden_states.T) # So that each aa in a column
+    #normalize this df for batch correction
+    #if we normalize we need to transform normalized embeddings. 
+    #or do the transformed normalized embeddings also work?
+
+    #hidden_states_pd = pd.DataFrame(hidden_states.T) # So that each aa in a column
+    # hidden_states_normalized_array = preprocessing.normalize(hidden_states)
+    # print("printing hidden states: \n")
+    # print(hidden_states_normalized_array)
+    # print("printing hidden states shape: \n", hidden_states_normalized_array.shape)
+    hidden_states_normalized_pd = pd.DataFrame(preprocessing.normalize(hidden_states.T))
+   
+   
+   #ZERO CENTERING
+    # print("finding the mean")
+
+    # row_means = np.mean(hidden_states, axis=1)
+    # zero_centered_arr = hidden_states - row_means.reshape(-1, 1)
+    # print(zero_centered_arr)
+
+
+    # data_centered = np.array()
+    # for r in hidden_states:
+    #     row_mean = r.mean()
+    #     print("printing row_mean \n", row_mean)
+    #     center_function = lambda x: x - row_mean
+    #     r_centered = center_function(r)
+    #     data_centered = np.vstack([data_centered,r_centered])
+    # print(data_centered)
+    # print(hidden_states.mean())
+    # center_function = lambda x: x - hidden_states.mean()
+    # data_centered = center_function(hidden_states)
+
+
+    #hidden_states_zero_centered = 
+    #TESTING BATCH CORRECTION
+    #print("printing hidden states df")
+    #print(hidden_states_pd)
     #ic(hidden_states_pd)
+
+    #normalization
     
+    #batch_list tells which sequence each aa comes from
     batch_series = pd.Series(batch_list)
+    # batch_df = pd.DataFrame(batch_series, columns=["batch"])
+    # print("printing batch_df \n", batch_df)
+
     #levels = list(range(len(seqs_aas)))
     design_list = [(batch_series == level) * 1 for level in levels]
     design = pd.concat(design_list, axis = 1)
-    hidden_states_batch = combat(hidden_states_pd, batch_list, design)
+    # print("printing design:\n", design)
+
+
+    hidden_states_batch = combat(hidden_states_normalized_pd, batch_list, design)
+    #print("about to run harmony")
+    ##hidden_states_batch_harmony = harmonize(hidden_states_normalized_array, batch_df, batch_key = 'batch')
+   # print("harmony ran")
+    #print("harmony output: \n", hidden_states_batch_harmony)
     #ic(hidden_states_batch)
     hidden_states_corrected = np.array(hidden_states_batch).T.astype(np.float32)
+    ##hidden_states_corrected_harmony = np.ascontiguousarray(hidden_states_batch_harmony.astype(np.float32))
     return(hidden_states_corrected)
 
 
@@ -1109,9 +1173,12 @@ def get_rbhs2(hitlist):
 #@profile
 def get_besthits(I,  minscore = 0.1 ): 
 
+    #need to make a dictionary where the key is the a tuple of the two seqIDs and the value is all of the rbhs for just these two sequences
    hitlist = []
+   hitdict = {}
    for aa in I.keys():
       for targetseq in I[aa].keys():
+<<<<<<< HEAD
           if len(I[aa][targetseq]) > 0 :
               # Top score is always first
               #besthit = I[aa][targetseq][0]
@@ -1122,8 +1189,26 @@ def get_besthits(I,  minscore = 0.1 ):
 
               if besthit_score >= minscore:
                   hitlist.append([aa, besthit_aa, besthit_score])
+=======
+          if aa.seqindex == targetseq:
+            continue
+          else:
+            hitdict_key = frozenset([aa.seqindex, targetseq])
+            if hitdict_key not in hitdict.keys():
+                hitdict[hitdict_key] = []
+            #print("hitdict_key, seq1, seq2", hitdict_key, aa.seqindex, targetseq)
+            if len(I[aa][targetseq]) > 0 :
+                # Top score is always first
+                besthit = I[aa][targetseq][0]
+                besthit_aa = besthit[0] # AA
+                besthit_score = besthit[1] #score to query aa
+>>>>>>> origin/mnc
 
-   return(hitlist)
+                if besthit_score >= minscore:
+                    #hitlist.append([aa, besthit_aa, besthit_score])
+                    hitdict[hitdict_key].append([aa, besthit_aa, besthit_score])
+   print("printing hitdict after get_besthits: \n", hitdict)
+   return(hitdict)
 
 
 #@profile
@@ -1131,20 +1216,25 @@ def get_rbhs(hitlist_top, min_edges = 0):
     '''
     [aa1, aa2, score (higher = better]
     '''
+<<<<<<< HEAD
 
     logger.info("Get reciprocal best hits")
 
+=======
+>>>>>>> origin/mnc
     G_hitlist = igraph.Graph.TupleList(edges=hitlist_top, directed=True)
+    print("printing hitlist_top")
+    print(hitlist_top)
     weights = [x[2] for x in hitlist_top]
 
-    rbh_bool = G_hitlist.is_mutual()
+    #rbh_bool = G_hitlist.is_mutual()
 
     hitlist = []
     G_hitlist.es['weight'] = weights
-
+    print("Here1", G_hitlist)
     G_hitlist.es.select(_is_mutual=False).delete()
     G_hitlist.vs.select(_degree=0).delete()
-
+    print("here2", G_hitlist)
 
     sources = [G_hitlist.vs[x.source]['name'] for x in G_hitlist.es()]
     targets = [G_hitlist.vs[x.target]['name'] for x in G_hitlist.es()]
@@ -1164,6 +1254,422 @@ def graph_from_rbh(rbh_list, directed = False):
     G = G.simplify(combine_edges = "first")
     return(G)
 
+
+########################################
+#### Beginning of Isabel's code for MNCM
+
+def processing(rbh_list):
+    # input: rbh_list
+    # output: types,edges,layout,names
+    print('in processing')
+    types = []
+    edges = []
+    layout = []
+    rbh_list_mod = [(x[0],x[1]) for x in rbh_list if x[0].seqnum != x[1].seqnum]
+    # Create a set to store the unique tuples
+    rbh_list_noreps = set()
+
+    # Loop over each tuple in the list
+    for tup in rbh_list_mod:
+        # Check if the tuple is in the unique set, or if the reversed tuple is in the unique set
+        if tup not in rbh_list_noreps and (tup[1], tup[0]) not in rbh_list_noreps:
+            # If it's not, add it to the unique set
+            rbh_list_noreps.add(tup)
+    
+    rbh_list_noreps = list(rbh_list_noreps)
+    seq1 = [x[0] for x in rbh_list_noreps]
+    print(len(seq1))
+
+    seq2 = [x[1] for x in rbh_list_noreps]
+    print(len(seq2))
+
+    all_nodes_seq1_sorted = sorted(seq1, key = lambda x : x.seqpos)
+    # print("printing all_nodes_seq1_sorted")
+    # print(all_nodes_seq1_sorted)
+    all_nodes_seq2_sorted = sorted(seq2, key = lambda x : x.seqpos)
+    # print("printing all_nodes_seq2_sorted")
+    # print(all_nodes_seq2_sorted)
+
+    # convert edgelist to node_id edges
+    
+    
+    names = (sorted(list(set(all_nodes_seq1_sorted + all_nodes_seq2_sorted)), key = lambda x : (x.seqnum, x.seqpos)))
+    # print("printing names")
+    # print(names)
+    #print(len(names))
+    indexes = list(x for x in range(len(names)))
+
+    #name_to_index = dict(map(lambda i,j : (i,j) , names_as_str,indexes))
+    name_to_index = {names[i]: indexes[i] for i in range(len(names))}
+
+    # name_to_index_list = list(zip(names,indexes))
+    # name_to_index = dict(name_to_index_list)
+    # print(len(name_to_index))
+    # print(name_to_index)
+    all_nodes = list(set(flatten(rbh_list_noreps)))
+
+    all_seqnums = sorted(list(set([x.seqnum for x in all_nodes])))
+    print(all_seqnums)
+    all_seq1 = [x for x in all_nodes if x.seqnum == all_seqnums[0]]
+    all_seq2 = [x for x in all_nodes if x.seqnum == all_seqnums[1]]
+    print(all_seq1)
+    print(all_seq2)
+    types = [0]*len(all_seq1) + [1]*len(all_seq2)
+    indexed_edges_mod =  [tuple(sorted((name_to_index[x], name_to_index[y]))) for (x,y) in rbh_list_noreps]
+
+    #creating layout
+    for i in range(len(all_nodes_seq1_sorted)):
+        layout.append((i,0))
+    for i in range(len(all_nodes_seq2_sorted)):
+        layout.append((i,1))
+    
+    return(types, indexed_edges_mod, layout, names)
+
+def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
+    print("in graph_from_hits_noncrossing")
+    new_rbh = []
+    for (first,second,score) in rbh_list:
+        if first.seqaa == "X" or second.seqaa == "X":
+            continue
+        else:
+            new_rbh.append((first,second,score))
+
+    rbh_list = new_rbh
+
+    types,edges,layout,names = processing(rbh_list)
+    print('graph being made in hits_noncrossing')
+    print("printing types: \n", types)
+    print("printing edges: \n", edges)
+    G = igraph.Graph.Bipartite(types=types,edges=edges)
+    print("graph made")
+
+    weights = [x[2] for x in rbh_list]
+    G.es['weight'] = weights
+    G.vs['name'] = names
+    G = G.simplify(combine_edges = "first")
+    if G.vcount() != 0:
+        if wmnc:
+            print("doing weighted labeling")
+            labeled_G,k_list = labeling_weighted(G)
+            print("doing weighted edge selection")
+            final, soln_found = edge_selection_weighted(labeled_G, k_list, [])
+
+        else:
+            print("doing labeling not weighted")
+            labeled_G,k = labeling(G)
+            print("doing edge selection not weighted")
+            final, soln_found = edge_selection(labeled_G, k, [])
+
+        ic(labeled_G)
+        if len(final) == 1:
+            final_edges = final[0]
+        elif type(final[0]) == tuple:
+            final_edges=final
+        else:
+            final_edges=find_best(labeled_G, final)
+
+        if type(final_edges) != list:
+            final_edges = [final_edges]
+ 
+        final_G = igraph.Graph.Bipartite(types=types,edges=final_edges)
+
+        final_G.es['weight'] = weights
+        final_G.vs['name'] = names
+        final_G = final_G.simplify(combine_edges = "first")
+
+        return(final_G)
+    else: 
+        return(G)
+    
+def not_crossing(e1, e2):
+    #input: two edges
+    #output: boolean, True if the edges do not cross and False otherwise
+    if (e1.tuple[0] < e2.tuple[0]) and (e1.tuple[1] < e2.tuple[1]) or (e1.tuple[0] > e2.tuple[0]) and (e1.tuple[1] > e2.tuple[1]):
+        return True
+    else:
+        return False
+
+def not_crossing_tuple(e1, e2):
+    #input: two tuples
+    #output: boolean, True if the edges do not cross and False otherwise
+    if (e1[0] < e2[0]) and (e1[1] < e2[1]) or (e1[0] > e2[0]) and (e1[1] > e2[1]):
+        return True
+    else:
+        return False
+
+def labeling(G):
+    #input: G, a starting graph
+    #output: (G,k_list), (the starting graph but with maximum edge labels, along with a list of edge labels k_list)
+    #print("PRINTING LABELING G: \n", G)
+    print("in weighted labeling")
+    edges = [e.tuple for e in G.es]
+
+    first_target = min(v.index for v in G.vs if v["type"] ==1)
+
+    #initialize vertex labels
+    for v in G.vs:
+        if (first_target <= v.index) and (v.index in [e[1] for e in edges]):
+            v["LN"] = 0
+        else:
+            v["LN"] = None
+    
+    #dest_nodes = list(set([v for v in G.vs if v["type"] ==1]))
+    source_nodes = list(set([v for v in G.vs if v["type"] ==0]))
+    # print("printing dest_nodes")
+    # print(dest_nodes)
+    for i in range(len(source_nodes)):
+        FS_i = [e for e in G.es if e.source == i]
+        for e in FS_i:
+            if e.source ==i:
+                #find target node
+                j = e.target
+                #find max label of nodes above target node (only labels for target nodes)
+                labels_before_j = [v["LN"] for v in G.vs if v.index < j and first_target <= v.index and v["LN"] != None]
+
+                # set the edge label to be 
+                # the score for edge i,j + the max of the node labels above the target node (zero if there are none)
+                e["L"] = 1 + max(labels_before_j, default =0)
+        for e in FS_i:
+            if e.source == i:
+                j = e.target
+                G.vs[j]["LN"] = max(e["L"], G.vs[j]["LN"])
+    #print([e["L"] for e in G.es])
+    k = max([e["L"] for e in G.es])
+
+    #returns labeled graph, max edge label
+    print("edge labels: \n", [e["L"] for e in G.es])
+    print("node labels: \n", [v["LN"] for v in G.vs])
+    return(G,k)
+
+
+def labeling_weighted(G):
+    #input: G, a starting graph
+    #output: (G,k), (the starting graph but with maximum edge labels)
+    #print("PRINTING LABELING G: \n", G)
+    print("in labeling")
+    edges = [e.tuple for e in G.es]
+
+    first_target = min(v.index for v in G.vs if v["type"] ==1)
+
+    #initialize vertex labels
+    for v in G.vs:
+        if (first_target <= v.index) and (v.index in [e[1] for e in edges]):
+            v["LN"] = 0
+        else:
+            v["LN"] = None
+    
+    #dest_nodes = list(set([v for v in G.vs if v["type"] ==1]))
+    source_nodes = list(set([v for v in G.vs if v["type"] ==0]))
+    # print("printing dest_nodes")
+    # print(dest_nodes)
+    for i in range(len(source_nodes)):
+        FS_i = [e for e in G.es if e.source == i]
+        for e in FS_i:
+            if e.source ==i:
+                #find target node
+                j = e.target
+                #find max label of nodes above target node (only labels for target nodes)
+                labels_before_j = [v["LN"] for v in G.vs if v.index < j and first_target <= v.index and v["LN"] != None]
+
+                # set the edge label to be 
+                # 1 + the max of the node labels above the target node (zero if there are none)
+                e["L"] = e['weight'] + max(labels_before_j, default =0)
+        for e in FS_i:
+            if e.source == i:
+                j = e.target
+                G.vs[j]["LN"] = max(e["L"], G.vs[j]["LN"])
+    #print([e["L"] for e in G.es])
+    k_list = ([e["L"] for e in G.es])
+    #returns labeled graph, max edge label
+    print("edge labels: \n", [e["L"] for e in G.es])
+    print("node labels: \n", [v["LN"] for v in G.vs])
+    return(G,k_list)
+
+
+
+def edge_selection_weighted(G,k_list,soln = [],soln_found = False): 
+    if soln != [] and soln_found:
+        print("soln is not empty and soln_found is true")
+        return (soln, soln_found)
+    print("in edge_selection")
+   
+    #input: G, a labeled graph
+    #output: options of edges to be selected for MNCM of G
+    print("printing k_list")
+    print(k_list)
+    print("printing type of k_list")
+    print(type(k_list))
+    
+    solns = []
+    all_soln = soln
+
+    if len(k_list) == 0:
+        print("len k_list == 0")
+        #print(k_max)
+        soln_found = True
+        return (all_soln, soln_found)
+
+    k_max = max(k_list)
+    k_list_next = [k for k in k_list if k != k_max]
+    maxes = [e for e in G.es if e["L"] ==k_max]
+    if len(maxes) >1:
+        print(maxes)
+        print("THERE ARE MULTIPLE MAXES, picking one for debugging purposes")
+        maxes = maxes[0]
+        print(len(maxes))
+        print(maxes)
+    # if len(maxes)==0:
+    #     print("len maxes == 0")
+    #     print(k_max)
+    #     soln_found = True
+    #     return (all_soln, soln_found)
+    if len(maxes)==1 or k_max==1 or len(k_list) ==1 or isinstance(maxes, igraph.Edge):
+        print(maxes)
+        print("len(maxes)==1 and k==1")
+        edge = maxes[0].tuple
+        if soln == None:
+            print("soln == None")
+            return (all_soln, soln_found)
+        elif soln == [] or all(not_crossing_tuple(edge, soln_edge) for soln_edge in soln):
+            print("soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]")
+            new_soln = soln + [edge]
+            print(k_max)
+            all_soln, soln_found = edge_selection_weighted(G, k_list_next, new_soln, soln_found)
+            return (all_soln, soln_found)
+        else:
+            all_soln, soln_found = edge_selection_weighted(G, k_list_next, soln, soln_found)
+            return (all_soln, soln_found)
+    else:
+        for m in maxes:
+            #checks that all of the edges in the existing solution don't cross the new max
+            if all(not_crossing_tuple(soln_edge,m.tuple) for soln_edge in soln):
+                print("printing last edge in soln")
+                print(soln[-1])
+                new_soln = all_soln+ [m.tuple]
+                print("going to new iteration")
+                print(k_max)
+                print("in the else")
+                to_add, soln_found = edge_selection_weighted(G, k_list_next, new_soln, soln_found)
+                print("back")
+                print(len(to_add))                
+                solns = solns + [to_add]
+        if len(solns) == 1:
+            soln_found = True
+            [final] = solns
+            print("coming from if, there is one solution")
+            print(final)
+            soln_found = True
+            return(final, soln_found)
+        else:
+            print("this is full soln list: \n", solns)
+            best = find_best(G,solns)
+            soln_found = True
+            return(best, soln_found)
+
+def edge_selection(G,k,soln = [],soln_found = False): 
+    if soln != [] and soln_found:
+        print("soln is not empty and soln_found is true")
+        return (soln, soln_found)
+    print("in edge_selection")   
+    #input: G, a labeled graph
+    #output: options of edges to be selected for MNCM of G
+    # print("soln at the beginning")
+    # print(soln)
+    
+    #basic idea
+    #select an edge labeled k
+    #while k > 1
+        #select an edge with label k-1 that doesn't intersect the chosen edge
+        #k -=1
+
+
+    # print("inputs to edge_selection")
+    # print(G, "\n", k,  "\n", soln)
+    solns = []
+    maxes = [e for e in G.es if e["L"] ==k]
+    #print("printing maxes: \n", maxes)
+    # print("printing soln")
+    # print(soln)
+    all_soln = soln
+    # print("printing all_soln")
+    # print(all_soln)
+    # if k==0:
+    #     print(len(maxes))
+    #     print(maxes)
+    #     return(all_soln)
+    if len(maxes)==0:
+        print("len maxes == 0")
+        print(k)
+        soln_found = True
+        return (all_soln, soln_found)
+    elif len(maxes)==1 or k==1:
+        print(maxes)
+        print("len(maxes)==1 and k==1")
+        edge = maxes[0].tuple
+        if soln == None:
+            print("soln == None")
+            return (all_soln, soln_found)
+        elif soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]:
+            print("soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]")
+            new_soln = soln + [edge]
+            print(k)
+            all_soln, soln_found = edge_selection(G, k-1, new_soln, soln_found)
+            return (all_soln, soln_found)
+        else:
+            return (all_soln, soln_found)
+    else:
+        # print("in else")
+        #there are multiple maxes
+        #poss_next = [e for e in G.es if e["L"] == k-1]
+        for max in maxes:
+            #checks that all of the edges in the existing solution don't cross the new max
+            if all(not_crossing_tuple(soln_edge,max.tuple) for soln_edge in soln):
+                # print("all before adding:")
+                # print(all_soln)
+                # print("printing max: \n", max.tuple)
+                new_soln = all_soln+ [max.tuple]
+                # print("printing new_soln: \n", new_soln)
+                print("going to new iteration")
+                print(k)
+                print("in the else")
+                to_add, soln_found = edge_selection(G, k-1, new_soln, soln_found)
+                print("back")
+                print(len(to_add))
+                # print(to_add)
+                
+                solns = solns + [to_add]
+        #print("returning solns")
+        #print(solns)
+        if len(solns) == 1:
+            soln_found = True
+            [final] = solns
+            print("coming from if, there is one solution")
+            print(final)
+            soln_found = True
+            return(final, soln_found)
+        else:
+            #print("coming from else, there are multiple solutions")
+            #if solns[0] == solns[1]:
+                #print("they're the same soln")
+            #print("these are the solns: \n", solns)
+            print("this is full soln list: \n", solns)
+            best = find_best(G,solns)
+            # [final] = best
+            soln_found = True
+            return(best, soln_found)
+
+def find_best(G, solns):
+    scores = []
+    for mncm in solns:
+        total = 0
+        for edge in G.es:
+            if edge.tuple in mncm:
+                total += edge['weight']
+        scores.append(total)
+    index = scores.index(max(scores))
+    final_edges = solns[index]
+    print("picked final edges: \n", final_edges)
+    return(final_edges)
 
 ###################################
 #### Amino acid clustering functions
@@ -1916,6 +2422,7 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
             else:
                 #ic("applying walktrap")
                 #ic("len(connected_set, min_dupped", len(connected_set), min_dupped)
+                print("G being clustered: \n", G)
                 clustering = G.community_walktrap(steps = 3, weights = 'weight').as_clustering()
                 for sub_G in clustering.subgraphs():
                      sub_connected_set =  sub_G.vs()['name']
@@ -2065,7 +2572,11 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     
     If a new member of an rbh cluster has a large unassigned range, check if has higher rbh t o sequence?
     '''
+<<<<<<< HEAD
     start_clust = time()
+=======
+    print("cluster order: \n", cluster_order)
+>>>>>>> origin/mnc
     all_alternates_dict = {}
     clusters_filt = list(clustid_to_clust.values())
     #ic("fill_in_unassigned_w_clustering: TESTING OUT CLUSTERS_FILT")
@@ -2108,10 +2619,18 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
        address_time = time()
 
+<<<<<<< HEAD
        newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
 
        #print("TESTER: address time", time()  - address_time)
        #print("newer clusters", newer_clusters)
+=======
+       newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
+       #ic(newer_clusters[0:5])
+       print('RBH_DICT after addressing unassigned aas: \n', rbh_dict)
+       print('newer RBH_DICT after addressing unassigned aas: \n', newer_rbh)
+       print('newer_clusters after addressing unassigned aas: \n', newer_clusters)
+>>>>>>> origin/mnc
        #ic(newer_rbh[0:5])
        all_alternates_dict = {**all_alternates_dict, **alternates_dict}
        new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
@@ -2180,16 +2699,24 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
          else:
             new_clusters_filt.append(clust)
 
-
+    #print("filtered clusters: \n", clusters_filt)
+    #print("new filtered clusters before removing sublist: \n", new_clusters_filt)
     new_clusters_filt = removeSublist(new_clusters_filt)
+    #print("new filtered clusters after removing sublist: \n", new_clusters_filt)
 
     clusters_new = remove_overlap_with_old_clusters(new_clusters_filt, clusters_filt)
     clusters_merged = clusters_new + clusters_filt
+<<<<<<< HEAD
     #print("TESTER overlap time", time() - overlap_time)
     #for x in clusters_merged:
     #   logging.debug("clusters_merged", x)
     #print("TESTER:clustering_time", time() - start_clust)
     start = time() 
+=======
+    #for x in clusters_merged:
+       #ic("clusters_merged", x)
+    
+>>>>>>> origin/mnc
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_merged, seqs_aas, gapfilling_attempt, minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seqnames, args = args)
     #print("TESTER:organizing_time", time() - start)
 
@@ -2264,7 +2791,11 @@ def get_targets(gap, seqs_aas, cluster_order, pos_to_clustid):
 
 
 #@profile
+<<<<<<< HEAD
 def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, pos_to_clustid = {}):
+=======
+def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, args=None):
+>>>>>>> origin/mnc
 
         # Avoid repeats of same rbh calculation
         if True: #not frozenset(scope_aas) in rbh_dict.keys():
@@ -2295,6 +2826,7 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
             # This basically scales with k from KNN
             #print("TESTER limited_I2_select", time() - limited_I2_start)
             # Get reciprocal best hits in a limited range
+<<<<<<< HEAD
             new_hitlist = get_besthits(limited_I2, minscore)
             
             logging.debug(len(new_hitlist))
@@ -2341,6 +2873,40 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
         for x in new_clusters:
             logger.debug("address_unassigned_aas:new_clusters {}".format(x))
        
+=======
+
+            new_hitdict = get_besthits(limited_I2, minscore)
+            print("printing new_hitdict: \n", new_hitdict)
+            graphs = []
+            for k,v in new_hitdict.items():
+                print("in this for loop!!")
+                print("printing key")
+                print(k)
+                print("printing value")
+                print(v)
+
+                new_rbh = get_rbhs(v)
+                new_rbh = maximum_increasing(new_rbh)
+                #ic("new_rbh from get_rbh", new_rbh[0:5])
+                rbh_dict[frozenset(scope_aas)] = new_rbh
+                G = graph_from_hits_noncrossing(new_rbh, wmnc = args.wmnc)
+                graphs.append(G)
+            #merge the graphs into one
+            new_G = igraph.union(graphs, byname=True)
+            print(new_G)
+
+        else:
+            #ic("address_unassigned_aas RBH pulled from cache")
+            new_rbh = rbh_dict[frozenset(scope_aas)]
+        #for x in new_rbh:
+             #print("address_unassigned_aas:new_rbh", x)
+        #G = graph_from_rbh(new_rbh)
+        new_clusters,all_alternates_dict  = first_clustering(new_G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap )
+        print("printing new clusters:", new_clusters)
+        #for x in new_clusters:
+            #ic("address_unassigned_aas:new_clusters", x)
+
+>>>>>>> origin/mnc
         clustered_aas = list(flatten(new_clusters))
 
         return(new_clusters, new_rbh, rbh_dict, all_alternates_dict)
