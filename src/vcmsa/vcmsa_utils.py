@@ -1178,18 +1178,16 @@ def get_besthits(I,  minscore = 0.1 ):
    hitdict = {}
    for aa in I.keys():
       for targetseq in I[aa].keys():
-<<<<<<< HEAD
-          if len(I[aa][targetseq]) > 0 :
-              # Top score is always first
-              #besthit = I[aa][targetseq][0]
-              # Get the first item from an OrderedDict
-              besthit = next(iter(I[aa][targetseq].items()))  
-              besthit_aa = besthit[0] # AA
-              besthit_score = besthit[1] #score to query aa
-
-              if besthit_score >= minscore:
-                  hitlist.append([aa, besthit_aa, besthit_score])
-=======
+          #if len(I[aa][targetseq]) > 0 :
+          #    # Top score is always first
+          #    #besthit = I[aa][targetseq][0]
+          #    # Get the first item from an OrderedDict
+          #    besthit = next(iter(I[aa][targetseq].items()))  
+          #    besthit_aa = besthit[0] # AA
+          #    besthit_score = besthit[1] #score to query aa
+          #
+          #     if besthit_score >= minscore:
+          #        hitlist.append([aa, besthit_aa, besthit_score])
           if aa.seqindex == targetseq:
             continue
           else:
@@ -1199,10 +1197,13 @@ def get_besthits(I,  minscore = 0.1 ):
             #print("hitdict_key, seq1, seq2", hitdict_key, aa.seqindex, targetseq)
             if len(I[aa][targetseq]) > 0 :
                 # Top score is always first
-                besthit = I[aa][targetseq][0]
-                besthit_aa = besthit[0] # AA
-                besthit_score = besthit[1] #score to query aa
->>>>>>> origin/mnc
+                
+                print("{}".format(I[aa][targetseq]))
+                #print("{}".format(list(I[aa][targetseq])[0]))
+                #besthit =                 print(besthit)
+                besthit_aa = list(I[aa][targetseq].keys())[0]
+                besthit_score = list(I[aa][targetseq].values())[0]
+                #besthit_score = besthit[1] #score to query aa
 
                 if besthit_score >= minscore:
                     #hitlist.append([aa, besthit_aa, besthit_score])
@@ -1216,25 +1217,19 @@ def get_rbhs(hitlist_top, min_edges = 0):
     '''
     [aa1, aa2, score (higher = better]
     '''
-<<<<<<< HEAD
 
     logger.info("Get reciprocal best hits")
 
-=======
->>>>>>> origin/mnc
     G_hitlist = igraph.Graph.TupleList(edges=hitlist_top, directed=True)
     print("printing hitlist_top")
     print(hitlist_top)
     weights = [x[2] for x in hitlist_top]
 
-    #rbh_bool = G_hitlist.is_mutual()
 
     hitlist = []
     G_hitlist.es['weight'] = weights
-    print("Here1", G_hitlist)
     G_hitlist.es.select(_is_mutual=False).delete()
     G_hitlist.vs.select(_degree=0).delete()
-    print("here2", G_hitlist)
 
     sources = [G_hitlist.vs[x.source]['name'] for x in G_hitlist.es()]
     targets = [G_hitlist.vs[x.target]['name'] for x in G_hitlist.es()]
@@ -2572,11 +2567,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     
     If a new member of an rbh cluster has a large unassigned range, check if has higher rbh t o sequence?
     '''
-<<<<<<< HEAD
     start_clust = time()
-=======
-    print("cluster order: \n", cluster_order)
->>>>>>> origin/mnc
     all_alternates_dict = {}
     clusters_filt = list(clustid_to_clust.values())
     #ic("fill_in_unassigned_w_clustering: TESTING OUT CLUSTERS_FILT")
@@ -2619,18 +2610,15 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
        address_time = time()
 
-<<<<<<< HEAD
        newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
 
        #print("TESTER: address time", time()  - address_time)
        #print("newer clusters", newer_clusters)
-=======
-       newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
+       #newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
        #ic(newer_clusters[0:5])
-       print('RBH_DICT after addressing unassigned aas: \n', rbh_dict)
-       print('newer RBH_DICT after addressing unassigned aas: \n', newer_rbh)
-       print('newer_clusters after addressing unassigned aas: \n', newer_clusters)
->>>>>>> origin/mnc
+       #print('RBH_DICT after addressing unassigned aas: \n', rbh_dict)
+       #print('newer RBH_DICT after addressing unassigned aas: \n', newer_rbh)
+       #print('newer_clusters after addressing unassigned aas: \n', newer_clusters)
        #ic(newer_rbh[0:5])
        all_alternates_dict = {**all_alternates_dict, **alternates_dict}
        new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
@@ -2706,17 +2694,6 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
     clusters_new = remove_overlap_with_old_clusters(new_clusters_filt, clusters_filt)
     clusters_merged = clusters_new + clusters_filt
-<<<<<<< HEAD
-    #print("TESTER overlap time", time() - overlap_time)
-    #for x in clusters_merged:
-    #   logging.debug("clusters_merged", x)
-    #print("TESTER:clustering_time", time() - start_clust)
-    start = time() 
-=======
-    #for x in clusters_merged:
-       #ic("clusters_merged", x)
-    
->>>>>>> origin/mnc
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_merged, seqs_aas, gapfilling_attempt, minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seqnames, args = args)
     #print("TESTER:organizing_time", time() - start)
 
@@ -2791,11 +2768,8 @@ def get_targets(gap, seqs_aas, cluster_order, pos_to_clustid):
 
 
 #@profile
-<<<<<<< HEAD
 def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, pos_to_clustid = {}):
-=======
-def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, args=None):
->>>>>>> origin/mnc
+        #def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, args=None):
 
         # Avoid repeats of same rbh calculation
         if True: #not frozenset(scope_aas) in rbh_dict.keys():
@@ -2826,27 +2800,46 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
             # This basically scales with k from KNN
             #print("TESTER limited_I2_select", time() - limited_I2_start)
             # Get reciprocal best hits in a limited range
-<<<<<<< HEAD
-            new_hitlist = get_besthits(limited_I2, minscore)
+
+            new_hitdict = get_besthits(limited_I2, minscore)
+            print("printing new_hitdict: \n", new_hitdict)
+            graphs = []
+            for k,v in new_hitdict.items():
+
+                new_rbh = get_rbhs(v)
+                #new_rbh = maximum_increasing(new_rbh)
+                rbh_dict[frozenset(scope_aas)] = new_rbh
+                G = graph_from_hits_noncrossing(new_rbh, wmnc = False)
+                graphs.append(G)
+            #merge the graphs into one
+            new_G = igraph.union(graphs, byname=True)
+
+        else:
+            #address_unassigned_aas RBH pulled from cache"
+            new_rbh = rbh_dict[frozenset(scope_aas)]
+        new_clusters, all_alternates_dict  = first_clustering(G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap, pos_to_clustid = pos_to_clustid )
+
+        logger.debug("new_clusters_old_function {}".format(new_clusters))
+        for x in new_clusters:
+            logger.debug("address_unassigned_aas:new_clusters {}".format(x))
+        #for x in new_clusters:
+            #ic("address_unassigned_aas:new_clusters", x)
+
+            #new_hitlist = get_besthits(limited_I2, minscore)
             
-            logging.debug(len(new_hitlist))
 
 
-            new_rbh = get_rbhs(new_hitlist)
-            logger.debug(len(new_rbh))
-            new_rbh = maximum_increasing(new_rbh)
-            logger.debug(len(new_rbh))
             #ic("new_rbh from get_rbh", new_rbh[0:5])
 
 
-            rbh_dict[frozenset(scope_aas)] = new_rbh
-        else:
-            #ic("address_unassigned_aas RBH pulled from cache")
-            new_rbh = rbh_dict[frozenset(scope_aas)]
-        for x in new_rbh:
-             logger.debug("address_unassigned_aas:new_rbh {}".format(x))
+        #    rbh_dict[frozenset(scope_aas)] = new_rbh
+        #else:
+        #    #ic("address_unassigned_aas RBH pulled from cache")
+        #    new_rbh = rbh_dict[frozenset(scope_aas)]
+        #for x in new_rbh:
+        #     logger.debug("address_unassigned_aas:new_rbh {}".format(x))
        
-        G = graph_from_rbh(new_rbh)
+        #G = graph_from_rbh(new_rbh)
         all_alternates_dict = {}
         #cluster_list1 = []
         #cluster_list2 = []
@@ -2868,46 +2861,8 @@ def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betw
         #new_clusters = cluster_list1 + cluster_list2 + cluster_list3 + cluster_list4
 
         # TEST CHANGE
-        new_clusters, all_alternates_dict  = first_clustering(G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap, pos_to_clustid = pos_to_clustid )
-        logger.debug("new_clusters_old_function {}".format(new_clusters))
-        for x in new_clusters:
-            logger.debug("address_unassigned_aas:new_clusters {}".format(x))
-       
-=======
-
-            new_hitdict = get_besthits(limited_I2, minscore)
-            print("printing new_hitdict: \n", new_hitdict)
-            graphs = []
-            for k,v in new_hitdict.items():
-                print("in this for loop!!")
-                print("printing key")
-                print(k)
-                print("printing value")
-                print(v)
-
-                new_rbh = get_rbhs(v)
-                new_rbh = maximum_increasing(new_rbh)
-                #ic("new_rbh from get_rbh", new_rbh[0:5])
-                rbh_dict[frozenset(scope_aas)] = new_rbh
-                G = graph_from_hits_noncrossing(new_rbh, wmnc = args.wmnc)
-                graphs.append(G)
-            #merge the graphs into one
-            new_G = igraph.union(graphs, byname=True)
-            print(new_G)
-
-        else:
-            #ic("address_unassigned_aas RBH pulled from cache")
-            new_rbh = rbh_dict[frozenset(scope_aas)]
-        #for x in new_rbh:
-             #print("address_unassigned_aas:new_rbh", x)
-        #G = graph_from_rbh(new_rbh)
-        new_clusters,all_alternates_dict  = first_clustering(new_G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap )
-        print("printing new clusters:", new_clusters)
-        #for x in new_clusters:
-            #ic("address_unassigned_aas:new_clusters", x)
-
->>>>>>> origin/mnc
-        clustered_aas = list(flatten(new_clusters))
+      
+        #clustered_aas = list(flatten(new_clusters))
 
         return(new_clusters, new_rbh, rbh_dict, all_alternates_dict)
 

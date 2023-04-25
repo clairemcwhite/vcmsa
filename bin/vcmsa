@@ -444,7 +444,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     hitlist_all = get_besthits(I2, minscore = 0.7) # No threshold for first clustering? Change to zero 
     #new_hitdict = get_besthits(I2, minscore = 0.5) #added threshold of 0.5
     new_hitdict = get_besthits(I2, minscore = 0)
-    print("printing new_hitdict: \n", new_hitdict)
+    #print("printing new_hitdict: \n", new_hitdict)
     graphs = []
     for k,v in new_hitdict.items():
         #print("printing key")
@@ -455,15 +455,14 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             new_rbh = get_rbhs(v)
         elif bhf == "no_rbh":
             new_rbh = v
-        print("first new_rbh")
-        print(new_rbh)
+        #print("first new_rbh")
+        #print(new_rbh)
 
         #add commandline argument to do with or without maximum increasing subsequence
-        #test should output final rbh list which we can then compare to gold standard
         if mis == True:
             new_rbh = maximum_increasing(new_rbh)
-            print("second new_rbh")
-            print(new_rbh)
+            #print("second new_rbh")
+            #print(new_rbh)
 
                  
         #if mnc and wmnc flags are both on, perform weighted
@@ -472,6 +471,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             print("doing weighted maximum non crossing")
             graphs.append(G) 
         elif mnc == True:
+            print("doing unweighted maximum non crossing")
             G = graph_from_hits_noncrossing(new_rbh)
             graphs.append(G)
         else:
@@ -480,6 +480,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
     #merge the graphs into one
     G = igraph.union(graphs, byname=True)
+
+    
+
 
     #add commandline argument to stop here
     if rbh_outfile:
@@ -493,18 +496,19 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
         exit(0)
 
 
-    start = time() 
-    
-    #rbh_list = get_rbhs(hitlist_all)  
-    end = time()
+   
+    log_level = logging.getLogger().getEffectiveLevel() 
+    if logging.getLevelName(log_level) == "DEBUG":
+       for e in G.es:
+           source_name = G.vs[e.source]['name']
+           target_name = G.vs[e.target]['name']
+           logging.debug("initial rbh: {}, {}, {}".format(source_name.seqnum, target_name.seqnum, e['weight']))
+
     #print(end - start)
 
 
     logging.info("got reciprocal best hits")
    
-
-    for x in rbh_list:
-      logging.debug("rbh".format(x)) 
 
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
     #print("new_len", len(rbh_list))
@@ -806,9 +810,10 @@ if __name__ == '__main__':
         shutil.rmtree(record_dir, ignore_errors=True)
     
     os.mkdir(record_dir)
-
-    if os.path.exists(rbh_outfile):
-        os.remove(rbh_outfile)
+  
+    if rbh_outfile:
+        if os.path.exists(rbh_outfile):
+            os.remove(rbh_outfile)
 
 
     args.outfile_name  = outfile_name

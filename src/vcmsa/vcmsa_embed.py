@@ -580,6 +580,22 @@ if __name__ == "__main__":
          print(headnames)
     else:
        headnames = None
+
+
+    embedding_dict = get_embeddings(sequences_spaced, 
+                                    args.model_path, 
+                                    get_sequence_embeddings = args.get_sequence_embeddings, 
+                                    get_aa_embeddings = args.get_aa_embeddings, 
+                                    padding = padding, 
+                                    seqlens = seqlens,
+                                    layers = layers,
+                                    heads = headnames,
+                                    ragged_arrays = args.ragged_arrays,
+                                    aa_pcamatrix_pkl = args.aa_pcamatrix_pkl, 
+                                    sequence_pcamatrix_pkl = args.sequence_pcamatrix_pkl,
+                                    strat = args.strat,
+                                    cpu_only = cpu_only)
+
    
     # Reduce sequence dimension with a new pca transform 
     if args.sequence_target_dim:
@@ -632,7 +648,6 @@ if __name__ == "__main__":
     
     
     
-# Would like to use SentenceTransformers GPU parallelization, but only currently can do sequence embeddings. Need to do adapt it
 def embed_sequences(model_path, sequences, extra_padding,  pkl_out):
     '''
     
