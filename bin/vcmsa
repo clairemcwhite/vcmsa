@@ -161,10 +161,10 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
     sequence_array = np.array(sequence_embedding_list, dtype="float32")
     numseqs = len(seqs)
     G, s_index = get_seqsims(sequence_array, k = numseqs)
-    print("printing sequence_array info: \n")
-    print(sequence_array)
-    print(len(sequence_array))
-    print(len(sequence_array[0]))
+    #print("printing sequence_array info: \n")
+    #print(sequence_array)
+    #print(len(sequence_array))
+    #print(len(sequence_array[0]))
     #print("printing sequence_array: \n", sequence_array)
     to_exclude = []
 
@@ -196,7 +196,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
         #ic("GG", G.es()['weight'])
         edgelist = []
         weightlist = []
-        print("printing to_exclude in initial loop: \n", to_exclude)
+        #print("printing to_exclude in initial loop: \n", to_exclude)
         for edge in G.es():
              if G.vs[edge.target]["name"] not in to_exclude:
                   if G.vs[edge.source]["name"] not in to_exclude:
@@ -460,6 +460,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
         #add commandline argument to do with or without maximum increasing subsequence
         if mis == True:
+            logging.info("doing maximum increasing subsequence")
             new_rbh = maximum_increasing(new_rbh)
             #print("second new_rbh")
             #print(new_rbh)
@@ -468,10 +469,10 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
         #if mnc and wmnc flags are both on, perform weighted
         if wmnc == True:
             G = graph_from_hits_noncrossing(new_rbh, wmnc = wmnc)
-            print("doing weighted maximum non crossing")
+            logging.info("doing weighted maximum non crossing")
             graphs.append(G) 
         elif mnc == True:
-            print("doing unweighted maximum non crossing")
+            logging.info("doing unweighted maximum non crossing")
             G = graph_from_hits_noncrossing(new_rbh)
             graphs.append(G)
         else:
@@ -649,7 +650,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                 #minclustsize=0
         #ic("This is the minclustsize", minclustsize)
          
-        print("too small: \n", too_small)
+        logging.debug(f"too small: {too_small}\n")
         unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid, too_small)
         #for x in unassigned:
            #ic("unassign", x)
@@ -709,15 +710,17 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
             logging.info("Align by clustering reciprocal best hit network")
-            cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_rbh = fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, I2,  gapfilling_attempt, minscore = minscore ,minclustsize = minclustsize, ignore_betweenness = ignore_betweenness, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, seqnames = seq_names, args = args)
- 
-            outnet = "{}/{}.testnet_clustering_group_{}_gapfilling_{:04}.csv".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
-            with open(outnet, "w") as outfile:
-                  outfile.write("aa1,aa2,score\n")
-                  # If do reverse first, don't have to do second resort
-                  for x in all_new_rbh:
-                     outstring = "{},{},{}\n".format(x[0], x[1], x[2])        
-                     outfile.write(outstring)
+            start_clustering = time()
+            cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_G = fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, I2,  gapfilling_attempt, minscore = minscore ,minclustsize = minclustsize, ignore_betweenness = ignore_betweenness, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, seqnames = seq_names, args = args)
+            logging.debug("Time to cluster {}".format(time() - start_clustering))
+            # Option here to write rbh network, but need to adapt to using graph object
+            #outnet = "{}/{}.testnet_clustering_group_{}_gapfilling_{:04}.csv".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
+            #with open(outnet, "w") as outfile:
+            #      outfile.write("aa1,aa2,score\n")
+            #      # If do reverse first, don't have to do second resort
+            #      for x in all_new_rbh:
+            #         outstring = "{},{},{}\n".format(x[0], x[1], x[2])        
+            #         outfile.write(outstring)
 
 
         else:
@@ -861,16 +864,16 @@ if __name__ == '__main__':
 
     else:
         seqlens = [len(x) for x in seqs]
-        print("printing model_name:")
-        print(model_name)
-        print("printing seq_lens")
-        print(seqlens)
-        print("printing layers")
-        print(layers)
-        print("printing padding")
-        print(padding)
-        print("printing headnames")
-        print(headnames)
+        #print("printing model_name:")
+        #print(model_name)
+        #print("printing seq_lens")
+        #print(seqlens)
+        #print("printing layers")
+        #print(layers)
+        #print("printing padding")
+        #print(padding)
+        #print("printing headnames")
+        #print(headnames)
         embedding_dict = get_embeddings(seqs_spaced,
                                     model_name,
                                     seqlens = seqlens,

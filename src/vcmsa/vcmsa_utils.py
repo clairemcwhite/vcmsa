@@ -350,8 +350,7 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
     logging.debug("clusters at start of organize {}".format(clusterlist))
 
     cluster_orders_dict, pos_to_clust, clustid_to_clust, dag_reached = clusters_to_dag(clusterlist, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
-    #GETTinG EMPTY CLUSTERLIST
-    print("clusterlist: \n", clusterlist)
+    #print("clusterlist: \n", clusterlist)
     dag_attempts = 1
     while dag_reached == False:
                     
@@ -367,8 +366,8 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
 
 
     #GETTING EMPTY CLUSTER ORDER
-    print("cluster order: \n", cluster_order)
-    print("clustid_to_clust : \n", clustid_to_clust)
+    #print("cluster order: \n", cluster_order)
+    #print("clustid_to_clust : \n", clustid_to_clust)
 
     alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seqnames)
 
@@ -486,7 +485,7 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     dag_reached = False
     #ic("status of remove_both", remove_both)
     #CLUSTERS ARE ALREADY EMPTY AT BEGINNING OF THIS FCN
-    print('clusters_filt at beginning of clusters_to_dag: \n', clusters_filt)
+    #print('clusters_filt at beginning of clusters_to_dag: \n', clusters_filt)
     numseqs = len(seqs_aas)
     logging.debug("get cluster dict")
     pos_to_clustid, clustid_to_clust = get_cluster_dict(clusters_filt)
@@ -1198,7 +1197,7 @@ def get_besthits(I,  minscore = 0.1 ):
             if len(I[aa][targetseq]) > 0 :
                 # Top score is always first
                 
-                print("{}".format(I[aa][targetseq]))
+                #print("{}".format(I[aa][targetseq]))
                 #print("{}".format(list(I[aa][targetseq])[0]))
                 #besthit =                 print(besthit)
                 besthit_aa = list(I[aa][targetseq].keys())[0]
@@ -1208,7 +1207,7 @@ def get_besthits(I,  minscore = 0.1 ):
                 if besthit_score >= minscore:
                     #hitlist.append([aa, besthit_aa, besthit_score])
                     hitdict[hitdict_key].append([aa, besthit_aa, besthit_score])
-   print("printing hitdict after get_besthits: \n", hitdict)
+   #print("printing hitdict after get_besthits: \n", hitdict)
    return(hitdict)
 
 
@@ -1221,8 +1220,7 @@ def get_rbhs(hitlist_top, min_edges = 0):
     logger.info("Get reciprocal best hits")
 
     G_hitlist = igraph.Graph.TupleList(edges=hitlist_top, directed=True)
-    print("printing hitlist_top")
-    print(hitlist_top)
+    #print(hitlist_top)
     weights = [x[2] for x in hitlist_top]
 
 
@@ -1256,7 +1254,6 @@ def graph_from_rbh(rbh_list, directed = False):
 def processing(rbh_list):
     # input: rbh_list
     # output: types,edges,layout,names
-    print('in processing')
     types = []
     edges = []
     layout = []
@@ -1273,42 +1270,27 @@ def processing(rbh_list):
     
     rbh_list_noreps = list(rbh_list_noreps)
     seq1 = [x[0] for x in rbh_list_noreps]
-    print(len(seq1))
 
     seq2 = [x[1] for x in rbh_list_noreps]
-    print(len(seq2))
 
     all_nodes_seq1_sorted = sorted(seq1, key = lambda x : x.seqpos)
-    # print("printing all_nodes_seq1_sorted")
-    # print(all_nodes_seq1_sorted)
     all_nodes_seq2_sorted = sorted(seq2, key = lambda x : x.seqpos)
-    # print("printing all_nodes_seq2_sorted")
-    # print(all_nodes_seq2_sorted)
-
     # convert edgelist to node_id edges
     
     
     names = (sorted(list(set(all_nodes_seq1_sorted + all_nodes_seq2_sorted)), key = lambda x : (x.seqnum, x.seqpos)))
-    # print("printing names")
-    # print(names)
-    #print(len(names))
     indexes = list(x for x in range(len(names)))
 
-    #name_to_index = dict(map(lambda i,j : (i,j) , names_as_str,indexes))
     name_to_index = {names[i]: indexes[i] for i in range(len(names))}
 
-    # name_to_index_list = list(zip(names,indexes))
-    # name_to_index = dict(name_to_index_list)
-    # print(len(name_to_index))
-    # print(name_to_index)
     all_nodes = list(set(flatten(rbh_list_noreps)))
 
     all_seqnums = sorted(list(set([x.seqnum for x in all_nodes])))
-    print(all_seqnums)
+    #print(all_seqnums)
     all_seq1 = [x for x in all_nodes if x.seqnum == all_seqnums[0]]
     all_seq2 = [x for x in all_nodes if x.seqnum == all_seqnums[1]]
-    print(all_seq1)
-    print(all_seq2)
+    #print(all_seq1)
+    #print(all_seq2)
     types = [0]*len(all_seq1) + [1]*len(all_seq2)
     indexed_edges_mod =  [tuple(sorted((name_to_index[x], name_to_index[y]))) for (x,y) in rbh_list_noreps]
 
@@ -1321,7 +1303,7 @@ def processing(rbh_list):
     return(types, indexed_edges_mod, layout, names)
 
 def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
-    print("in graph_from_hits_noncrossing")
+    #print("in graph_from_hits_noncrossing")
     new_rbh = []
     for (first,second,score) in rbh_list:
         if first.seqaa == "X" or second.seqaa == "X":
@@ -1332,11 +1314,11 @@ def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
     rbh_list = new_rbh
 
     types,edges,layout,names = processing(rbh_list)
-    print('graph being made in hits_noncrossing')
-    print("printing types: \n", types)
-    print("printing edges: \n", edges)
+    #print('graph being made in hits_noncrossing')
+    #print("printing types: \n", types)
+    #print("printing edges: \n", edges)
     G = igraph.Graph.Bipartite(types=types,edges=edges)
-    print("graph made")
+    #print("graph made")
 
     weights = [x[2] for x in rbh_list]
     G.es['weight'] = weights
@@ -1344,18 +1326,17 @@ def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
     G = G.simplify(combine_edges = "first")
     if G.vcount() != 0:
         if wmnc:
-            print("doing weighted labeling")
+            #print("doing weighted labeling")
             labeled_G,k_list = labeling_weighted(G)
-            print("doing weighted edge selection")
+            #print("doing weighted edge selection")
             final, soln_found = edge_selection_weighted(labeled_G, k_list, [])
 
         else:
-            print("doing labeling not weighted")
+            #print("doing labeling not weighted")
             labeled_G,k = labeling(G)
-            print("doing edge selection not weighted")
+            #print("doing edge selection not weighted")
             final, soln_found = edge_selection(labeled_G, k, [])
 
-        ic(labeled_G)
         if len(final) == 1:
             final_edges = final[0]
         elif type(final[0]) == tuple:
@@ -1396,7 +1377,7 @@ def labeling(G):
     #input: G, a starting graph
     #output: (G,k_list), (the starting graph but with maximum edge labels, along with a list of edge labels k_list)
     #print("PRINTING LABELING G: \n", G)
-    print("in weighted labeling")
+    #print("in weighted labeling")
     edges = [e.tuple for e in G.es]
 
     first_target = min(v.index for v in G.vs if v["type"] ==1)
@@ -1432,8 +1413,8 @@ def labeling(G):
     k = max([e["L"] for e in G.es])
 
     #returns labeled graph, max edge label
-    print("edge labels: \n", [e["L"] for e in G.es])
-    print("node labels: \n", [v["LN"] for v in G.vs])
+    #print("edge labels: \n", [e["L"] for e in G.es])
+    #print("node labels: \n", [v["LN"] for v in G.vs])
     return(G,k)
 
 
@@ -1441,7 +1422,7 @@ def labeling_weighted(G):
     #input: G, a starting graph
     #output: (G,k), (the starting graph but with maximum edge labels)
     #print("PRINTING LABELING G: \n", G)
-    print("in labeling")
+    #print("in labeling")
     edges = [e.tuple for e in G.es]
 
     first_target = min(v.index for v in G.vs if v["type"] ==1)
@@ -1476,30 +1457,30 @@ def labeling_weighted(G):
     #print([e["L"] for e in G.es])
     k_list = ([e["L"] for e in G.es])
     #returns labeled graph, max edge label
-    print("edge labels: \n", [e["L"] for e in G.es])
-    print("node labels: \n", [v["LN"] for v in G.vs])
+    #print("edge labels: \n", [e["L"] for e in G.es])
+    #print("node labels: \n", [v["LN"] for v in G.vs])
     return(G,k_list)
 
 
 
 def edge_selection_weighted(G,k_list,soln = [],soln_found = False): 
     if soln != [] and soln_found:
-        print("soln is not empty and soln_found is true")
+        #print("soln is not empty and soln_found is true")
         return (soln, soln_found)
-    print("in edge_selection")
+    #print("in edge_selection")
    
     #input: G, a labeled graph
     #output: options of edges to be selected for MNCM of G
-    print("printing k_list")
-    print(k_list)
-    print("printing type of k_list")
-    print(type(k_list))
+    #print("printing k_list")
+    #print(k_list)
+    #print("printing type of k_list")
+    #print(type(k_list))
     
     solns = []
     all_soln = soln
 
     if len(k_list) == 0:
-        print("len k_list == 0")
+        #print("len k_list == 0")
         #print(k_max)
         soln_found = True
         return (all_soln, soln_found)
@@ -1508,27 +1489,27 @@ def edge_selection_weighted(G,k_list,soln = [],soln_found = False):
     k_list_next = [k for k in k_list if k != k_max]
     maxes = [e for e in G.es if e["L"] ==k_max]
     if len(maxes) >1:
-        print(maxes)
-        print("THERE ARE MULTIPLE MAXES, picking one for debugging purposes")
+        #print(maxes)
+        #print("THERE ARE MULTIPLE MAXES, picking one for debugging purposes")
         maxes = maxes[0]
-        print(len(maxes))
-        print(maxes)
+        #print(len(maxes))
+        #print(maxes)
     # if len(maxes)==0:
     #     print("len maxes == 0")
     #     print(k_max)
     #     soln_found = True
     #     return (all_soln, soln_found)
     if len(maxes)==1 or k_max==1 or len(k_list) ==1 or isinstance(maxes, igraph.Edge):
-        print(maxes)
-        print("len(maxes)==1 and k==1")
+        #print(maxes)
+        #print("len(maxes)==1 and k==1")
         edge = maxes[0].tuple
         if soln == None:
-            print("soln == None")
+            #print("soln == None")
             return (all_soln, soln_found)
         elif soln == [] or all(not_crossing_tuple(edge, soln_edge) for soln_edge in soln):
-            print("soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]")
+            #print("soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]")
             new_soln = soln + [edge]
-            print(k_max)
+            #print(k_max)
             all_soln, soln_found = edge_selection_weighted(G, k_list_next, new_soln, soln_found)
             return (all_soln, soln_found)
         else:
@@ -1538,34 +1519,34 @@ def edge_selection_weighted(G,k_list,soln = [],soln_found = False):
         for m in maxes:
             #checks that all of the edges in the existing solution don't cross the new max
             if all(not_crossing_tuple(soln_edge,m.tuple) for soln_edge in soln):
-                print("printing last edge in soln")
-                print(soln[-1])
+                #print("printing last edge in soln")
+                #print(soln[-1])
                 new_soln = all_soln+ [m.tuple]
-                print("going to new iteration")
-                print(k_max)
-                print("in the else")
+                #print("going to new iteration")
+                #print(k_max)
+                #print("in the else")
                 to_add, soln_found = edge_selection_weighted(G, k_list_next, new_soln, soln_found)
-                print("back")
-                print(len(to_add))                
+                #print("back")
+                #print(len(to_add))                
                 solns = solns + [to_add]
         if len(solns) == 1:
             soln_found = True
             [final] = solns
-            print("coming from if, there is one solution")
-            print(final)
+            #print("coming from if, there is one solution")
+            #print(final)
             soln_found = True
             return(final, soln_found)
         else:
-            print("this is full soln list: \n", solns)
+            #print("this is full soln list: \n", solns)
             best = find_best(G,solns)
             soln_found = True
             return(best, soln_found)
 
 def edge_selection(G,k,soln = [],soln_found = False): 
     if soln != [] and soln_found:
-        print("soln is not empty and soln_found is true")
+        #print("soln is not empty and soln_found is true")
         return (soln, soln_found)
-    print("in edge_selection")   
+    #print("in edge_selection")   
     #input: G, a labeled graph
     #output: options of edges to be selected for MNCM of G
     # print("soln at the beginning")
@@ -1593,21 +1574,21 @@ def edge_selection(G,k,soln = [],soln_found = False):
     #     print(maxes)
     #     return(all_soln)
     if len(maxes)==0:
-        print("len maxes == 0")
-        print(k)
+        #print("len maxes == 0")
+        #print(k)
         soln_found = True
         return (all_soln, soln_found)
     elif len(maxes)==1 or k==1:
-        print(maxes)
-        print("len(maxes)==1 and k==1")
+        #print(maxes)
+        #print("len(maxes)==1 and k==1")
         edge = maxes[0].tuple
         if soln == None:
-            print("soln == None")
+            #print("soln == None")
             return (all_soln, soln_found)
         elif soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]:
-            print("soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]")
+            #print("soln == [] or [not_crossing_tuple(edge, soln_edge) for soln_edge in soln]")
             new_soln = soln + [edge]
-            print(k)
+            #print(k)
             all_soln, soln_found = edge_selection(G, k-1, new_soln, soln_found)
             return (all_soln, soln_found)
         else:
@@ -1624,12 +1605,12 @@ def edge_selection(G,k,soln = [],soln_found = False):
                 # print("printing max: \n", max.tuple)
                 new_soln = all_soln+ [max.tuple]
                 # print("printing new_soln: \n", new_soln)
-                print("going to new iteration")
-                print(k)
-                print("in the else")
+                #print("going to new iteration")
+                #print(k)
+                #print("in the else")
                 to_add, soln_found = edge_selection(G, k-1, new_soln, soln_found)
-                print("back")
-                print(len(to_add))
+                #print("back")
+                #print(len(to_add))
                 # print(to_add)
                 
                 solns = solns + [to_add]
@@ -1638,8 +1619,8 @@ def edge_selection(G,k,soln = [],soln_found = False):
         if len(solns) == 1:
             soln_found = True
             [final] = solns
-            print("coming from if, there is one solution")
-            print(final)
+            #print("coming from if, there is one solution")
+            #print(final)
             soln_found = True
             return(final, soln_found)
         else:
@@ -1647,7 +1628,7 @@ def edge_selection(G,k,soln = [],soln_found = False):
             #if solns[0] == solns[1]:
                 #print("they're the same soln")
             #print("these are the solns: \n", solns)
-            print("this is full soln list: \n", solns)
+            #print("this is full soln list: \n", solns)
             best = find_best(G,solns)
             # [final] = best
             soln_found = True
@@ -1663,7 +1644,7 @@ def find_best(G, solns):
         scores.append(total)
     index = scores.index(max(scores))
     final_edges = solns[index]
-    print("picked final edges: \n", final_edges)
+    #print("picked final edges: \n", final_edges)
     return(final_edges)
 
 ###################################
@@ -1897,8 +1878,79 @@ def get_unassigned_aas(seqs_aas, pos_to_clustid, too_small = []):
 
 
 
-#@profile
+
 def get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid):
+    """
+    Retrieves amino acids within specified cluster range for each sequence in seqs_aas.
+
+
+    Args:
+
+        seqs_aas (list): List of list of each sequences amino acids.
+        cluster_order (list): List of the ordering of clusters.
+        starting_clustid (int or None): Starting cluster ID of the range. Use None or 0 for negative infinity.
+        ending_clustid (int or None): Ending cluster ID of the range. Use None or 0 for positive infinity.
+        pos_to_clustid (dict): Dictionary mapping amino acids to cluster IDs.
+
+    Returns:
+
+        list: List of lists, where each inner list contains amino acids within the specified cluster range for each sequence.
+
+    """
+
+
+    starting_clustid = -np.inf if not starting_clustid and starting_clustid != 0 else starting_clustid
+
+    ending_clustid = np.inf if not ending_clustid and ending_clustid != 0 else ending_clustid
+
+    def process_positions(x, starting_clustid, ending_clustid, pos_to_clustid):
+        """
+
+        Processes the amino acids in a sequence to find amino acids within the specified cluster range.
+        Args:
+
+            x (list): List of amino acids.
+            starting_clustid (int or None): Starting cluster ID of the range. Use None or 0 for negative infinity.
+            ending_clustid (int or None): Ending cluster ID of the range. Use None or 0 for positive infinity.
+            pos_to_clustid (dict): Dictionary mapping amino acids to cluster IDs.
+
+        Returns:
+
+            list: List of amino acids within the specified cluster range.
+
+        """
+        pos_list = []
+
+        startfound = starting_clustid == -np.inf
+
+        prevclust = ""
+        for pos in x:
+            pos_clust = pos_to_clustid.get(pos, None)
+            if pos_clust is not None:
+                prevclust = pos_clust
+                if pos_clust >= ending_clustid:
+                    break
+
+                elif starting_clustid < pos_clust < ending_clustid:
+                    pos_list.append(pos)
+                    startfound = True
+
+                elif pos_clust == starting_clustid:
+                    startfound = True
+
+            elif startfound or prevclust == cluster_order[-1]:
+                if prevclust and starting_clustid <= prevclust <= ending_clustid:
+                    pos_list.append(pos)
+                else:
+                    pos_list.append(pos)
+        return pos_list
+
+    pos_lists = [process_positions(x, starting_clustid, ending_clustid, pos_to_clustid) for x in seqs_aas]
+    return pos_lists
+
+
+#@profile
+def get_ranges_prerefactor(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid):
     # If unassigned sequence goes to the end of the sequence
     if not ending_clustid and ending_clustid != 0:
        ending_clustid = np.inf
@@ -2417,7 +2469,7 @@ def get_new_clustering(G, betweenness_cutoff = 0.10,  apply_walktrap = True, pre
             else:
                 #ic("applying walktrap")
                 #ic("len(connected_set, min_dupped", len(connected_set), min_dupped)
-                print("G being clustered: \n", G)
+                #print("G being clustered: \n", G)
                 clustering = G.community_walktrap(steps = 3, weights = 'weight').as_clustering()
                 for sub_G in clustering.subgraphs():
                      sub_connected_set =  sub_G.vs()['name']
@@ -2567,9 +2619,12 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     
     If a new member of an rbh cluster has a large unassigned range, check if has higher rbh t o sequence?
     '''
-    start_clust = time()
+    start_cluster = time()
+
+    tp1 = time()
     all_alternates_dict = {}
     clusters_filt = list(clustid_to_clust.values())
+    logging.debug("Time for tp1 {}".format(time() - tp1))
     #ic("fill_in_unassigned_w_clustering: TESTING OUT CLUSTERS_FILT")
     #for x in clusters_filt:
         #ic("fill_in_unassigned_w_clustering: preassignment clusters_filt", x)
@@ -2578,15 +2633,16 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     #ic("fill_in_unassigned_w_clustering:unassigned", unassigned)
     get_targets_time = time()
 
+    gap_time = time()
     for gap in unassigned:
-        t1_time = time()
         #print("fill_in_unassigned_w_clustering", gap)
         gap_edgelist = get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)
         edgelist = edgelist + gap_edgelist
         #print("TESTER: individual time", time() - t1_time)
     #print("TESTER: get_targets_time", time() - get_targets_time)
+    logging.debug("Time getting gap edgelist {}".format(time() - gap_time))
 
-    subgraph_time = time()
+    tp2 = time()
     edgelist_G = igraph.Graph.TupleList(edges=edgelist, directed=False)
     edgelist_G = edgelist_G.simplify() # Remove duplicate edges
     islands = edgelist_G.connected_components(mode = "weak")
@@ -2598,31 +2654,42 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     total_address = time()
 
     # This is parallelizable here
+    logging.debug("Time for tp2 {}".format(time() - tp2))
+    address_time = time()
+    graphs = []
+    address_time = time()
     for sub_G in islands.subgraphs():
        neighbors = {}
      
-       for vertex in sub_G.vs():
-           vertex_neighbors = sub_G.neighbors(vertex)
-           logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
-           neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
-       logging.debug("name     {}".format(sub_G.vs()['name']))
-       logging.debug("neighbors {}".format(neighbors))
+       #for vertex in sub_G.vs():
+       #    vertex_neighbors = sub_G.neighbors(vertex)
+       #    logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
+       #    neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
 
-       address_time = time()
 
-       newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
+       newer_clusters, newer_G, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
 
        #print("TESTER: address time", time()  - address_time)
        #print("newer clusters", newer_clusters)
        #newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
-       #ic(newer_clusters[0:5])
-       #print('RBH_DICT after addressing unassigned aas: \n', rbh_dict)
-       #print('newer RBH_DICT after addressing unassigned aas: \n', newer_rbh)
-       #print('newer_clusters after addressing unassigned aas: \n', newer_clusters)
-       #ic(newer_rbh[0:5])
        all_alternates_dict = {**all_alternates_dict, **alternates_dict}
        new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
-       all_new_rbh = all_new_rbh + newer_rbh
+       #all_new_rbh = all_new_rbh + newer_rbh
+       graphs.append(newer_G)
+
+
+            #merge the graphs into one
+    logging.debug("Time to do rbh {}".format(time() - address_time))
+    #merge_time = time()
+    #print("graphs", graphs)
+    #final_G = igraph.union(graphs, byname=True)
+    #print("union", final_G)
+    #logging.debug("Time for merging graphs {}".format(time() - merge_time))
+
+    dedup_time = time()
+
+    
+
 
     #print("TESTER, subgraph time", time() - subgraph_time)
     #print("TESTER total_addressing time", time() - total_address)
@@ -2654,7 +2721,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
     # If this makes clusters too small remove them 
     new_clusters = [clust for clust in new_clusters if len(clust) >= minclustsize]
-
+    logging.debug("Time to dedup {}".format(time() - dedup_time))
     #print("TESTER dedup time", time() - dedup_time)
     overlap_time = time()
     # In this section, remove any members of a new cluster that would bridge between previous clusters and cause over collapse
@@ -2692,78 +2759,138 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     new_clusters_filt = removeSublist(new_clusters_filt)
     #print("new filtered clusters after removing sublist: \n", new_clusters_filt)
 
+    remove_start = time()
     clusters_new = remove_overlap_with_old_clusters(new_clusters_filt, clusters_filt)
     clusters_merged = clusters_new + clusters_filt
+    logging.debug("Time to remove overlap {}".format(time() - remove_start))
+ 
+    organize_start = time()
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_merged, seqs_aas, gapfilling_attempt, minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seqnames, args = args)
-    #print("TESTER:organizing_time", time() - start)
+    logging.debug("Time to organize {}".format(time() - organize_start))
 
+    logging.debug("Time to do whole fill_in_unassigned_w_clustering {}".format(time() - start_cluster))
     #print("clustid_to_clust after feedback arc removal", clustid_to_clust)
     #print(too_small)
-    return(cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_rbh)
+    final_G = None
+    return(cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, final_G)
 
 
 
 
 #@profile
 
-def get_targets_old(gap, seqs_aas, cluster_order, pos_to_clustid):
+#def get_targets_old(gap, seqs_aas, cluster_order, pos_to_clustid):
+#
+#        starting_clustid = gap[0]
+#        ending_clustid = gap[2]
+#        gap_seqaas = gap[1]
+#        target_aas_list = get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
+#        if target_aas_list != target_aas_list2:
+#           print(target_aas_list)
+#           print(target_aas_list2)
+#
+#        edgelist = []
+#        target_aas = list(flatten(target_aas_list))
+#        for query in gap_seqaas:
+#              for target in target_aas:
+#                  edgelist.append([query, target])
+#
+#        return(edgelist)
 
-        starting_clustid = gap[0]
-        ending_clustid = gap[2]
-        gap_seqaas = gap[1]
-        #gap_seqnum = list(set([x.seqnum for x in gap_seqaas]))[0]
-        target_aas_list = get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
-
-        edgelist = []
-        target_aas = list(flatten(target_aas_list))
-        for query in gap_seqaas:
-              for target in target_aas:
-                  edgelist.append([query, target])
-
-        return(edgelist)
 
 def get_targets(gap, seqs_aas, cluster_order, pos_to_clustid):
 
+    """
+
+    Get the list of edges connecting amino acids (aas) in a sequence.
+
+    
+
+    This function takes a gap (a tuple with starting cluster ID, gap amino acids, and ending cluster ID),
+
+    a list of amino acid sequences (seqs_aas), a list of clusters ordered by their positions (cluster_order),
+
+    and a dictionary mapping positions to cluster IDs (pos_to_clustid). It returns a list of edges that
+
+    connect the amino acids in the sequence.
+
+
+
+    Args:
+
+    gap (tuple): A tuple containing the starting cluster ID, gap amino acids, and ending cluster ID.
+
+    seqs_aas (list): A list of amino acid sequences.
+
+    cluster_order (list): A list of clusters ordered by their positions.
+
+    pos_to_clustid (dict): A dictionary mapping positions to cluster IDs.
+
+
+
+    Returns:
+
+    edgelist (list): A list of edges connecting amino acids in the sequence.
+
+    """
+
+
+    starting_clustid = gap[0]
+
+    ending_clustid = gap[2]
+
+    gap_seqaas = gap[1]
+
+
+    # Get the list of target amino acids in the sequence
+
+    target_aas_list = get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
+
+
+
+    # Flatten the list of target amino acids
+
+    target_aas = [item for sublist in target_aas_list for item in sublist]
+
+
+
+    # Combine the target amino acids and gap amino acids
+
+    all_aas = target_aas + gap_seqaas
+
+
+
+    # Generate the list of edges by connecting consecutive amino acids in the sequence
+
+    edgelist = [[all_aas[i], all_aas[i + 1]] for i in range(len(all_aas) - 1)]
+
+
+
+def get_targets_prerefactor(gap, seqs_aas, cluster_order, pos_to_clustid):
+
         starting_clustid = gap[0]
         ending_clustid = gap[2]
         gap_seqaas = gap[1]
-        #gap_seqnum = list(set([x.seqnum for x in gap_seqaas]))[0]
         get_range_time = time()
-        # This is fast enough
+        time_1 = time()
+        #target_aas_list = get_ranges_prerefactor(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
+        #print("old time", time() - time_1)
+        #time_2 = time()
         target_aas_list = get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
-        #print("TESTER get_ranges time", time() - get_range_time)
-
-        print_time = time()
-        #print("target_aas_list", gap, target_aas_list)
-        #print("TESTER print time", time() - print_time)
+        #print("new time", time() - time_2)
         edgelist = []
 
         flatten_time = time()
         target_aas = list(flatten(target_aas_list))
-        #print("TESTER flatten_time", time() - flatten_time)
         last_time = time()
-        # THIS LOOP IS TAKING WAYY TOO LONG
-        #print("TESTER targets", target_aas)
-        #print("TESTER gap_seqaas", gap_seqaas)
-        #print("TESTER listlens", len(gap_seqaas), len(target_aas))
         
 
         all_aas = target_aas + gap_seqaas
-        #print("TESTER, all_aas", all_aas)
         # Make scope aas into minially connected network. 
+       
         for i in range(len(all_aas) - 1):
             edgelist.append([all_aas[i], all_aas[i + 1]])
 
-        #for edge in edgelist:
-        #       logging.debug("e1", edge)
-        #edgelist = []
-        #for query in gap_seqaas:
-        #      for target in target_aas:
-        #          edgelist.append([query, target])
-        #print("TESTER edgelist", len(edgelist))
-        #for edge in edgelist2:
-        #    logging.debug("e2", edge)        
-        #print("TESTER: last time", time() - last_time)
         return(edgelist)
 
 
@@ -2772,7 +2899,8 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
         #def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, args=None):
 
         # Avoid repeats of same rbh calculation
-        if True: #not frozenset(scope_aas) in rbh_dict.keys():
+        logging.debug(f"Time: Scope {scope_aas}")
+        if not frozenset(scope_aas) in rbh_dict.keys():
             limited_I2 = {}
             # Suspect that this is slow
 
@@ -2780,7 +2908,7 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
             for key in I2.keys():
                if key in scope_aas:
                    limited_I2[key] = I2[key].copy()
-            #print("TESTER copytime", time() - copy_time)
+            logging.debug("Time copytime {}".format(time() - copy_time))
             #ic("limited")
             #ic("address_unassigned_aas:new_rbh_minscore", minscore)
 
@@ -2790,34 +2918,48 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
             scope_aas_set = set(scope_aas)
             # REVISIT HERE, what is the neighbors object in hfa2
             #print("score_aas_set", scope_aas_set)
+            logging.debug("start limited_I2")
             for query_aa in limited_I2.keys():
                  # These keys 
                  for seq in limited_I2[query_aa].keys():
                        #limited_I2[query_aa][seq] = [x for x in limited_I2[query_aa][seq] if x[0] in neighbors[query_aa]]
                        limited_I2[query_aa][seq] =  OrderedDict({k:v for k,v in limited_I2[query_aa][seq].items() if k in scope_aas_set}) 
 
-            logging.debug(limited_I2)
+            logging.debug("Time to get limited_I2 {}".format(time() - limited_I2_start))
             # This basically scales with k from KNN
             #print("TESTER limited_I2_select", time() - limited_I2_start)
             # Get reciprocal best hits in a limited range
 
             new_hitdict = get_besthits(limited_I2, minscore)
-            print("printing new_hitdict: \n", new_hitdict)
+            #print("printing new_hitdict: \n", new_hitdict)
             graphs = []
+            internal_rbhtime = time()
             for k,v in new_hitdict.items():
 
                 new_rbh = get_rbhs(v)
-                #new_rbh = maximum_increasing(new_rbh)
-                rbh_dict[frozenset(scope_aas)] = new_rbh
+                new_rbh = maximum_increasing(new_rbh)
+                #rbh_dict[frozenset(scope_aas)] = new_rbh
                 G = graph_from_hits_noncrossing(new_rbh, wmnc = False)
                 graphs.append(G)
-            #merge the graphs into one
-            new_G = igraph.union(graphs, byname=True)
 
+            logging.debug("Time internal rbh {}".format(time() - internal_rbhtime))
+                #logging.debug(f"All graphs: {graphs}")
+            #merge the graphs into one
+            # The union function can be slow
+            internal_mergetime = time()
+            new_G = igraph.union(graphs, byname=True)
+            #logging.debug("Time internal merge {}".format(time() - internal_mergetime))
+            rbh_dict[frozenset(scope_aas)] = new_G
         else:
-            #address_unassigned_aas RBH pulled from cache"
-            new_rbh = rbh_dict[frozenset(scope_aas)]
-        new_clusters, all_alternates_dict  = first_clustering(G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap, pos_to_clustid = pos_to_clustid )
+            logging.debug("address_unassigned_aas RBH pulled from cache")
+            #new_rbh = rbh_dict[frozenset(scope_aas)]
+            cache_time = time()
+            new_G = rbh_dict[frozenset(scope_aas)]
+            #logging.debug("Time to pull from cache {}".format(time() - cache_time))
+        # There was previous a mistake here, where it took G instead of new_G.
+        clustering_time = time()
+        new_clusters, all_alternates_dict  = first_clustering(new_G, betweenness_cutoff = betweenness_cutoff,  ignore_betweenness = ignore_betweenness, apply_walktrap = apply_walktrap, pos_to_clustid = pos_to_clustid )
+        logger.debug("Time to cluster {}".format(time() - clustering_time))
 
         logger.debug("new_clusters_old_function {}".format(new_clusters))
         for x in new_clusters:
@@ -2864,7 +3006,7 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
       
         #clustered_aas = list(flatten(new_clusters))
 
-        return(new_clusters, new_rbh, rbh_dict, all_alternates_dict)
+        return(new_clusters, new_G, rbh_dict, all_alternates_dict)
 
 
 
