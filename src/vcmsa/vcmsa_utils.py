@@ -18,8 +18,19 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
 from vcmsa.combat_vsmsa_mod import combat
 #from transformer_infrastructure.feedback import remove_feedback_edges_old
 
+from concurrent.futures import ThreadPoolExecutor
+
+
+
 # For networks
 import igraph
+
+# For speed
+import numba
+from numba import njit
+from numba.typed import List, Dict
+from numba.types import Tuple
+from numba.core import types
 
 # For copying graph objects
 import copy
@@ -1842,8 +1853,9 @@ def get_unassigned_aas(seqs_aas, pos_to_clustid, too_small = []):
     too_small_list = list(flatten(too_small))
     unassigned = []
     for i in range(len(seqs_aas)):
-        prevclust = []
-        nextclust = []
+        # Change here for consistency
+        prevclust = -np.inf
+        nextclust = np.inf
         unsorted = []
         last_unsorted = -1
         for j in range(len(seqs_aas[i])):
@@ -1872,9 +1884,101 @@ def get_unassigned_aas(seqs_aas, pos_to_clustid, too_small = []):
 
               unsorted = [x for x in unsorted if x not in too_small_list]
               unassigned.append([prevclust, unsorted, nextclust, i])
-              nextclust = []
-              prevclust = []
+              nextclust = np.inf
+              prevclust = -np.inf
     return(unassigned)
+
+
+
+
+
+
+
+
+
+
+
+
+@njit
+def process_positions_numba(x, starting_clustid, ending_clustid, pos_to_clustid, cluster_order):
+
+    pos_list = List()
+
+
+
+    startfound = starting_clustid == -np.inf
+
+
+
+    prevclust = None
+
+    for pos in x:
+
+        pos_clust = pos_to_clustid.get(pos, None)
+
+
+        for pos in x:
+  
+            try:
+  
+                pos_clust = pos_to_clustid[pos]
+
+            except Exception:
+
+                pos_clust = -np.inf
+
+            
+
+        if pos_clust != -np.inf:
+
+            prevclust = pos_clust
+
+            if pos_clust >= ending_clustid:
+
+                break
+
+            elif starting_clustid < pos_clust < ending_clustid:
+
+                pos_list.append(pos)
+
+                startfound = True
+
+            elif pos_clust == starting_clustid:
+
+                startfound = True
+
+        elif startfound or prevclust == cluster_order[-1]:
+
+            if prevclust is not None and starting_clustid <= prevclust <= ending_clustid:
+                     pos_list.append(pos)
+
+            else:
+
+                pos_list.append(pos)
+
+    return pos_list
+
+
+
+@njit
+def get_ranges_numba(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid):
+
+    starting_clustid = -np.inf if not starting_clustid and starting_clustid != 0 else starting_clustid
+
+    ending_clustid = np.inf if not ending_clustid and ending_clustid != 0 else ending_clustid
+
+
+
+    pos_lists = List()
+
+    for x in seqs_aas:
+
+        pos_lists.append(process_positions_numba(x, starting_clustid, ending_clustid, pos_to_clustid, cluster_order))
+
+    return pos_lists
+
+
+
 
 
 
@@ -2612,6 +2716,62 @@ def process_connected_set_new(connected_set, G, dup_thresh = 1.2,  betweenness_c
 ########################################
 ######### Limited search: clustering phase
 
+
+
+
+def prepare_data_numba(seqs_aas, pos_to_clustid, cluster_order, unassigned):
+
+    seqs_aas_typed = List()
+
+    for seq in seqs_aas:
+
+        seqs_typed = List()
+
+        for aa in seq:
+
+            seqs_typed.append(str(aa.seqaa))
+
+        seqs_aas_typed.append(seqs_typed)
+
+
+
+    pos_to_clustid_typed = Dict.empty(key_type=types.unicode_type, value_type=types.int64)
+
+    for key, value in pos_to_clustid.items():
+
+        pos_to_clustid_typed[str(key.seqaa)] = value
+
+
+
+    cluster_order_typed = List()
+
+    for num in cluster_order:
+
+        cluster_order_typed.append(num)
+
+
+
+    unassigned_typed = List()
+
+    for gap in unassigned:
+
+        gap_typed = List()
+
+        for aa in gap[1]:
+
+            gap_typed.append(str(aa))
+
+        unassigned_typed.append((gap[0], gap_typed, gap[2]))
+
+
+
+    return seqs_aas_typed, pos_to_clustid_typed, cluster_order_typed, unassigned_typed
+
+
+
+
+
+
 #@profile
 def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, I2, gapfilling_attempt,  minscore = 0.1, minclustsize = 2, ignore_betweenness = False, betweenness_cutoff = 0.3, apply_walktrap = True, rbh_dict = {}, seqnames = [], args = None ):
     '''
@@ -2621,26 +2781,62 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     '''
     start_cluster = time()
 
-    tp1 = time()
+    #tp1 = time()
     all_alternates_dict = {}
     clusters_filt = list(clustid_to_clust.values())
-    logging.debug("Time for tp1 {}".format(time() - tp1))
+    #logging.debug("Time for tp1 {}".format(time() - tp1))
     #ic("fill_in_unassigned_w_clustering: TESTING OUT CLUSTERS_FILT")
     #for x in clusters_filt:
         #ic("fill_in_unassigned_w_clustering: preassignment clusters_filt", x)
     # extra arguments?
     edgelist = []
     #ic("fill_in_unassigned_w_clustering:unassigned", unassigned)
-    get_targets_time = time()
+    #get_targets_time = time()
 
-    gap_time = time()
-    for gap in unassigned:
-        #print("fill_in_unassigned_w_clustering", gap)
-        gap_edgelist = get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)
-        edgelist = edgelist + gap_edgelist
-        #print("TESTER: individual time", time() - t1_time)
-    #print("TESTER: get_targets_time", time() - get_targets_time)
-    logging.debug("Time getting gap edgelist {}".format(time() - gap_time))
+    #gap_time = time()
+    #for gap in unassigned:
+    #    #print("fill_in_unassigned_w_clustering", gap)
+    #    gap_edgelist = get_targets_prerefactor(gap, seqs_aas, cluster_order, pos_to_clustid)
+    #    edgelist = edgelist + gap_edgelist
+    #print("Time getting gap edgelist prerefactor {}".format(time() - gap_time))
+
+    #gap_time2 = time()
+
+    #edgelist = []
+  
+   
+
+    #for gap in unassigned:
+    #    #print("fill_in_unassigned_w_clustering", gap)
+    #    gap_edgelist = get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)
+    #    edgelist.extend(gap_edgelist)
+    #print("Time getting gap edgelist postrefactor {}".format(time() - gap_time2))
+
+    
+    #seqs_aas_typed, pos_to_clustid_typed, cluster_order_typed, unassigned_typed = prepare_data_numba(seqs_aas, pos_to_clustid, cluster_order, unassigned)
+
+   
+    #gap_time3 = time()
+
+    #edgelist = [edge for gap in unassigned for edge in get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)]
+
+ 
+    #edgelist = get_targets_numba(unassigned_typed, seqs_aas_typed, cluster_order_typed, pos_to_clustid_typed)
+     
+
+    #print("Time getting gap edgelist listcomp {}".format(time() - gap_time3))
+
+    gap_time4 = time()
+
+    def get_edges(gap):
+           return get_targets(gap, seqs_aas, cluster_order, pos_to_clustid)
+
+
+    with ThreadPoolExecutor() as executor:
+        all_gap_edgelists = list(executor.map(get_edges, unassigned))
+    edgelist = [edge for gap_edgelist in all_gap_edgelists for edge in gap_edgelist]
+    print("Time getting gap edgelist parallel {}".format(time() - gap_time4))
+
 
     tp2 = time()
     edgelist_G = igraph.Graph.TupleList(edges=edgelist, directed=False)
@@ -2656,30 +2852,76 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     # This is parallelizable here
     logging.debug("Time for tp2 {}".format(time() - tp2))
     address_time = time()
-    graphs = []
-    address_time = time()
-    for sub_G in islands.subgraphs():
-       neighbors = {}
-     
-       #for vertex in sub_G.vs():
-       #    vertex_neighbors = sub_G.neighbors(vertex)
-       #    logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
-       #    neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
+    #graphs = []
+    #address_time = time()
+    #for sub_G in islands.subgraphs():
+    #   neighbors = {}
+    # 
+    #   #for vertex in sub_G.vs():
+    #   #    vertex_neighbors = sub_G.neighbors(vertex)
+    #   #    logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
+    #   #    neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
+    # 
+    #
+    #   newer_clusters, newer_G, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
 
-
-       newer_clusters, newer_G, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
-
-       #print("TESTER: address time", time()  - address_time)
-       #print("newer clusters", newer_clusters)
        #newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
-       all_alternates_dict = {**all_alternates_dict, **alternates_dict}
-       new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
-       #all_new_rbh = all_new_rbh + newer_rbh
-       graphs.append(newer_G)
+    #   all_alternates_dict = {**all_alternates_dict, **alternates_dict}
+    #   new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
+    #   #all_new_rbh = all_new_rbh + newer_rbh
+    #   graphs.append(newer_G)
+    #        #merge the graphs into one
+    #logging.debug("Time to do rbh {}".format(time() - address_time))
+    #print("Time to do rbh {}".format(time() - address_time))
 
+    rbh_time2 = time()
+    def process_subgraph(sub_G, I2, rbh_dict, pos_to_clustid, apply_walktrap):
+    
+        neighbors = {}
+    
+        newer_clusters, newer_G, rbh_dict, alternates_dict = address_unassigned_aas(
+            sub_G.vs()['name'],
+            I2,
+            minscore=0.5,
+            ignore_betweenness=False,
+            betweenness_cutoff=0.3,
+            minsclustsize=2,
+            apply_walktrap=apply_walktrap,
+            rbh_dict=rbh_dict,
+            pos_to_clustid=pos_to_clustid
+        )
+        return newer_clusters, newer_G, rbh_dict, alternates_dict
+    
+    
+    
+    
+    # Parallelize the loop using ThreadPoolExecutor
+    with ThreadPoolExecutor() as executor:
+        results = executor.map(
+            process_subgraph,
+            islands.subgraphs(),
+            [I2] * len(islands.subgraphs()),
+            [rbh_dict] * len(islands.subgraphs()),
+            [pos_to_clustid] * len(islands.subgraphs()),
+            [apply_walktrap] * len(islands.subgraphs())
+    
+        )
+    
+    
+    
+    # Combine the results
+    new_clusters_from_rbh = []
+    graphs = []
+    
+    for newer_clusters, newer_G, rbh_dict, alternates_dict in results:
+        all_alternates_dict = {**all_alternates_dict, **alternates_dict}
+        new_clusters_from_rbh.extend(newer_clusters)
+        graphs.append(newer_G)
+    
+    print("Time to do rbh parallel {}".format(time() - rbh_time2))
+   
+    
 
-            #merge the graphs into one
-    logging.debug("Time to do rbh {}".format(time() - address_time))
     #merge_time = time()
     #print("graphs", graphs)
     #final_G = igraph.union(graphs, byname=True)
@@ -2798,72 +3040,139 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 #        return(edgelist)
 
 
+
+
+#@njit(parallel = True)
+#def get_targets_numba(unassigned_typed, seqs_aas_numba, cluster_order_numba, pos_to_clustid_numba):
+#
+#    #starting_clustid = gap[0]
+#    #ending_clustid = gap[2]
+#    #gap_seqaas = gap[1]
+#    for gap in unassigned_typed:
+#
+#        gap_seqaas_numba = gap[1]
+#        starting_clustid = gap[0]
+#        ending_clustid = gap[2]
+#
+#        target_aas_list = get_ranges_numba(seqs_aas_numba, cluster_order_numba, starting_clustid, ending_clustid, pos_to_clustid_numba)
+#    
+#        # Flatten the list of target amino acids
+#        target_aas = List()
+#    
+#        for sublist in target_aas_list:
+#            for item in sublist:
+#                target_aas.append(item)
+#    
+#    
+#    
+#        # Combine the target amino acids and gap amino acids
+#    
+#        all_aas = List()
+#    
+#        for aa in target_aas:
+#            all_aas.append(aa)
+#    
+#        for aa in gap_seqaas_numba:
+#            all_aas.append(aa)
+#    
+#        # Generate the list of edges by connecting consecutive amino acids in the sequence
+#    
+#        edgelist = List()
+#        for i in range(len(all_aas) - 1):
+#            edgelist.append((all_aas[i], all_aas[i + 1]))
+#        return edgelist
+
+
+
 def get_targets(gap, seqs_aas, cluster_order, pos_to_clustid):
 
     """
 
-    Get the list of edges connecting amino acids (aas) in a sequence.
-
-    
+    For each group of unassigned amino acids, pull the amino acids that these could potentially align with.
+  
+    For clustering between guideposts
 
     This function takes a gap (a tuple with starting cluster ID, gap amino acids, and ending cluster ID),
-
     a list of amino acid sequences (seqs_aas), a list of clusters ordered by their positions (cluster_order),
-
     and a dictionary mapping positions to cluster IDs (pos_to_clustid). It returns a list of edges that
-
     connect the amino acids in the sequence.
-
-
-
     Args:
 
     gap (tuple): A tuple containing the starting cluster ID, gap amino acids, and ending cluster ID.
-
     seqs_aas (list): A list of amino acid sequences.
-
-    cluster_order (list): A list of clusters ordered by their positions.
-
-    pos_to_clustid (dict): A dictionary mapping positions to cluster IDs.
-
-
+    cluster_order (list): A list of clusters ordered by their position in the alignment.
+    pos_to_clustid (dict): A dictionary mapping amino acids to cluster IDs.
 
     Returns:
-
-    edgelist (list): A list of edges connecting amino acids in the sequence.
+    edgelist (list): A minimum spanning tree between all amino acids.
 
     """
-
-
+    #print(gap)
     starting_clustid = gap[0]
-
     ending_clustid = gap[2]
-
     gap_seqaas = gap[1]
 
 
-    # Get the list of target amino acids in the sequence
 
+
+    time2 = time()
+    # Get the list of target amino acids in the sequence
     target_aas_list = get_ranges(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid)
+    #normal_time = time() - time2
+    #print("normal_time", normal_time)
+    #print(target_aas_list)
+
+
+
+    #def get_targets_numba(starting_clustid, ending_clustid, gap_seqaas_numba, seqs_aas_numba, cluster_order_numba, pos_to_clustid_numba):
+
+
+    #seqs_aas_typed = List()
+    #print(seqs_aas)
+    #for seq in seqs_aas:
+    #    seqs_typed = List()
+    #    for aa in seq:
+    #        seqs_typed.append(aa.seqaa)
+    #    seqs_aas_typed.append(seqs_typed)
+
+
+
+    #pos_to_clustid_typed = Dict()
+    #for key, value in pos_to_clustid.items():
+    #    pos_to_clustid_typed[key.seqaa] = value
+
+   
+    #cluster_order_typed = List()
+    #for num in cluster_order:
+    #    cluster_order_typed.append(num)
+
+
+    #print(seqs_aas_typed)
+    #print(cluster_order)
+    #print(starting_clustid)
+    #print(ending_clustid)
+    #print(pos_to_clustid_typed)
+    #time1 = time()
+    #target_aas_list = get_ranges_numba(seqs_aas_typed, cluster_order, starting_clustid, ending_clustid, pos_to_clustid_typed)
+    #numba_time = time() - time1
+
+
+    #print("numba_time", numba_time)
+       
 
 
 
     # Flatten the list of target amino acids
-
     target_aas = [item for sublist in target_aas_list for item in sublist]
 
-
-
     # Combine the target amino acids and gap amino acids
-
     all_aas = target_aas + gap_seqaas
-
-
 
     # Generate the list of edges by connecting consecutive amino acids in the sequence
 
     edgelist = [[all_aas[i], all_aas[i + 1]] for i in range(len(all_aas) - 1)]
 
+    return(edgelist)
 
 
 def get_targets_prerefactor(gap, seqs_aas, cluster_order, pos_to_clustid):
@@ -3027,6 +3336,42 @@ def removeSublist(lst):
 ########################################
 ######### Limited search: best match phase
 
+from concurrent.futures import ThreadPoolExecutor
+
+
+
+def process_gap(gap, clustid_to_clust, match_dict, I2):
+    starting_clustid = gap[0]
+    ending_clustid = gap[2]
+
+    if starting_clustid in clustid_to_clust.keys():
+        starting_clust = clustid_to_clust[starting_clustid]
+
+    else:
+        starting_clust = []
+
+    if ending_clustid in clustid_to_clust.keys():
+        ending_clust = clustid_to_clust[ending_clustid]
+
+    else:
+        ending_clust = []
+
+    already_searched = frozenset(gap[1] + starting_clust + ending_clust)
+    if already_searched in match_dict.keys():
+        return match_dict[already_searched]
+
+    else:
+        gap_matches = []
+
+        for gap_aa in gap[1]:
+            output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, I2)
+            if output:
+                gap_matches.append(output)
+        match_dict[already_searched] = gap_matches
+
+        return gap_matches
+
+
 
 #@profile
 def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = 1, remove_both = True, match_dict = {}, seqnames = [], args = None, I2 = {}):
@@ -3039,56 +3384,80 @@ def fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_
     matches = []
 
     match_scores = []
-    
+   
+    format_time = time() 
     unassigned = format_gaps(unassigned, max(clustid_to_clust.keys()))
-
-    for gap in unassigned:
-        logging.debug("gap {}".format(gap))
-        starting_clustid =  gap[0]
-        ending_clustid = gap[2]
-        #print(gap)
-        if starting_clustid in clustid_to_clust.keys():
-              # If before start of clusts, will be -1
-              starting_clust =  clustid_to_clust[starting_clustid]
-        else:
-              starting_clust = []
-        if ending_clustid  in clustid_to_clust.keys():
-              ending_clust =  clustid_to_clust[ending_clustid]
-        else:
-              ending_clust = []
-
-        already_searched = frozenset(gap[1] + starting_clust + ending_clust)
-        if already_searched in match_dict.keys():
-            #ic("Matches pulled from cache")
-            matches = matches + match_dict[already_searched]
-        else:
-            gap_matches = []
-
-            for gap_aa in gap[1]:
-                #start = time()
-                #candidates_aa2 = I2[gap_aa]
-                #print("pull from dict", time() - start)
-
-                #start = time()
-                
-                #candidates_aa = get_set_of_scores(gap_aa, index, hidden_states, index_to_aa)
-                #print("get_set_of_scores", time() - start)
-                # Slower
-                #print('candidates_aa', candidates_aa)
-                start = time()
-                # For each clustid_to_clust, it should be checked for consistency. 
-                #output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, candidates_aa, I2)
-                output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,  I2)
-                # Fast
-                #print("get_best_matches", time() - start)
-                if output:
-                   logging.debug("output {}".format(output))
-                   gap_matches.append(output)
-            matches = matches + gap_matches
-            match_dict[already_searched] = gap_matches
+    print("Time for format_gaps {}".format(time() - format_time))
+   
+    loop_time = time()
+    #for gap in unassigned:
+    #    logging.debug("gap {}".format(gap))
+    #    starting_clustid =  gap[0]
+    #    ending_clustid = gap[2]
+    #    #print(gap)
+    #    if starting_clustid in clustid_to_clust.keys():
+    #          # If before start of clusts, will be -1
+    #          starting_clust =  clustid_to_clust[starting_clustid]
+    #    else:
+    #          starting_clust = []
+    #    if ending_clustid  in clustid_to_clust.keys():
+    #          ending_clust =  clustid_to_clust[ending_clustid]
+    #    else:
+    #          ending_clust = []
+    #
+    #    #print(gap[1], starting_clust, ending_clust)
+    #    already_searched = frozenset(gap[1] + starting_clust + ending_clust)
+    #    if already_searched in match_dict.keys():
+    #        #ic("Matches pulled from cache")
+    #        matches = matches + match_dict[already_searched]
+    #    else:
+    #        gap_matches = []
+    #
+    #        for gap_aa in gap[1]:
+    #            start = time()
+    #            # For each clustid_to_clust, it should be checked for consistency. 
+    #            #output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust, candidates_aa, I2)
+    #            #if ending_clustid == np.inf:
+    #            #    ending_clustid = []
+    #            #if starting_clustid == -np.inf:
+    #            #    starting_clustid = []
+    #            output = get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,  I2)
+    #            # Fast
+    #            #print("get_best_matches", time() - start)
+    #            if output:
+    #               logging.debug("output {}".format(output))
+    #               gap_matches.append(output)
+    #        matches = matches + gap_matches
+    #        match_dict[already_searched] = gap_matches
 
     #for x in matches:
         #ic("match", x)
+    #Looped search is about 10x slower than parallel search
+    #print("Time for loop search {}".format(time() - loop_time))
+
+
+    parallel_time = time()
+    # Parallelize the loop using ThreadPoolExecutor
+    with ThreadPoolExecutor() as executor:
+
+        results = executor.map(
+            process_gap,
+            unassigned,
+            [clustid_to_clust] * len(unassigned),
+            [match_dict] * len(unassigned),
+            [I2] * len(unassigned)
+        )
+
+
+
+    # Combine the results
+    matches = []
+    for gap_matches in results:
+        matches.extend(gap_matches)
+
+
+    print("Time for parallel search {}".format(time() - parallel_time))
+
 
     clustid_to_clust = get_best_of_matches(clustid_to_clust, matches)
 
@@ -3137,7 +3506,8 @@ def get_best_of_matches(clustid_to_clust, matches):
                            current_bestscore = match[2]
                            current_bestmatch = match[0]
 
-
+                 #print(clustid_to_clust[clustid])
+                 #print(current_bestmatch)
                  newclust = clustid_to_clust[clustid] + [current_bestmatch]
                  #ic("Updating {} from {} to {}".format(clustid, clustid_to_clust[clustid], newclust))
                  clustid_to_clust[clustid] = newclust
@@ -3159,16 +3529,15 @@ def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,
      # candidate_w_score = zipped tuple [aa, score]
     scores = []
     current_best_score = 0
-    current_best_match = ""
+    current_best_match = None
     match_found = False
-    #ic(starting_clustid, ending_clustid)
-    #ic(gap_aa)
-    #ic(clustid_to_clust)
-    #print("gap_aa", gap_aa)
-    #print(I2[gap_aa])
-    for cand in range(starting_clustid + 1, ending_clustid):
-         #print("candidate", gap_aa, cand,  clustid_to_clust[cand], "bestscore", current_best_score, current_best_match)
+    #print(starting_clustid, ending_clustid)
+    if starting_clustid == -np.inf:
+         starting_clustid = -1
+    if ending_clustid == np.inf:
+         ending_clustid  = max(clustid_to_clust.keys())
 
+    for cand in range(starting_clustid + 1, ending_clustid):
          candidate_aas =  clustid_to_clust[cand]
          
          start = time()
@@ -3182,14 +3551,6 @@ def get_best_matches(starting_clustid, ending_clustid, gap_aa, clustid_to_clust,
                 # Not all clustered aa's will by in the I2 for a particular query aa
                 continue
          
-         #print("incluster scores2", incluster_scores2)
-         #print("ic scores2", time() - start)
-         #for target in candidates_aas:
-         #incluster_scores2 = [x for x in I2[aa] if x
-               
-         
-         #incluster_scores = [x for x in candidates_w_score if x[0] in candidate_aas]
-         #print("incluster scores", incluster_scores)
          if incluster_scores:
              total_incluster_score = sum([x[1] for x in incluster_scores]) / len(incluster_scores) # Take the mean score within the cluster. Or median?
              #print("total_inclucster", total_incluster_score)
