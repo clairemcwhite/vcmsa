@@ -360,6 +360,9 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     batch_correct = args.batch_correct
     seqlens = [len(x) for x in seqs]
     max_iterations = args.max_iterations # default 100
+    if len(seqlens) > max_iterations:
+        max_iterations = len(seqlens)
+ 
     cpu_only = args.cpu_only 
     numseqs = len(seqs)
     padded_seqlen = hstates_list.shape[1]

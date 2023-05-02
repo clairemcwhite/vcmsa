@@ -21,16 +21,15 @@ from vcmsa.combat_vsmsa_mod import combat
 from concurrent.futures import ThreadPoolExecutor
 
 
-
 # For networks
 import igraph
 
 # For speed
-import numba
-from numba import njit
-from numba.typed import List, Dict
-from numba.types import Tuple
-from numba.core import types
+#import numba
+#from numba import njit
+#from numba.typed import List, Dict
+#from numba.types import Tuple
+#from numba.core import types
 
 # For copying graph objects
 import copy
@@ -360,8 +359,12 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
     logging.debug("start organize clusters, during gapfilling attempt {}".format(gapfilling_attempt))
     logging.debug("clusters at start of organize {}".format(clusterlist))
 
+    ctd_time = time()
     cluster_orders_dict, pos_to_clust, clustid_to_clust, dag_reached = clusters_to_dag(clusterlist, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
+    print(f"clusters_to_dag time {time() - ctd_time}")
     #print("clusterlist: \n", clusterlist)
+    
+    reach_dagtime = time()
     dag_attempts = 1
     while dag_reached == False:
                     
@@ -372,8 +375,11 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
                return(1)
           cluster_orders_dict, pos_to_clust, clustid_to_clust,  dag_reached = clusters_to_dag(clusters_filt, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
           dag_attempts = dag_attempts + 1
+    print(f"reach dag time {time() - reach_dagtime}")
 
+    dtco_time = time()
     cluster_order, clustid_to_clust, pos_to_clustid =  dag_to_cluster_order(list(cluster_orders_dict.values()), seqs_aas, pos_to_clust, clustid_to_clust)
+    print(f"dag to cluster order {time() - dtco_time}")
 
 
     #GETTING EMPTY CLUSTER ORDER
@@ -495,7 +501,6 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     # For getting consensus cluster order
     dag_reached = False
     #ic("status of remove_both", remove_both)
-    #CLUSTERS ARE ALREADY EMPTY AT BEGINNING OF THIS FCN
     #print('clusters_filt at beginning of clusters_to_dag: \n', clusters_filt)
     numseqs = len(seqs_aas)
     logging.debug("get cluster dict")
@@ -507,6 +512,8 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     # alternates_dict needs to be added to new main clustering function
     #clusters_filt_dag_all = remove_feedback_edges2(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
     logging.debug("starting feedback edge removal")
+
+    
     clustid_to_clust_dag = remove_feedback_aas(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
     # see if dag was reached after aa removal    
     clusters_filt_dag_all = list(clustid_to_clust_dag.values())
@@ -530,14 +537,6 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
         clusters_filt_dag, clusters_to_add_back = remove_feedback_edges(cluster_orders_dict, clustid_to_clust,  gapfilling_attempt, remove_both, alignment_group = alignment_group, attempt = attempt, all_alternates_dict= all_alternates_dict, args = args)
 
 
-    #for x in clusters_filt_dag:
-       #ic("clusters_filt_dag", x)
-  
-    #for x in too_small:
-       #ic("removed, too small", x)
-
-    #print("Feedback edges removed")
-    #print("Get cluster order after feedback removeal")
 
         pos_to_clust_dag, clustid_to_clust_dag = get_cluster_dict(clusters_filt_dag)
         cluster_orders_dict = get_cluster_orders(pos_to_clust_dag, seqs_aas)
@@ -552,7 +551,6 @@ def clusters_to_dag(clusters_filt, seqs_aas, gapfilling_attempt, remove_both = T
     return(cluster_orders_dict, pos_to_clust_dag, clustid_to_clust_dag, dag_reached)
 
 
-#@profile
 def get_cluster_orders(cluster_dict, seqs_aas):
     # This is getting path of each sequence through clusters 
     cluster_orders_dict = {}
@@ -624,7 +622,7 @@ def remove_feedback_edges2(cluster_orders_dict, clustid_to_clust, gapfilling_att
     for x in fas:
         logging.debug("arc {}".format(x))
 
-    write_ordernet = True
+    write_ordernet = False
     logging.debug("gapfilling_attempt {}".format(gapfilling_attempt))
     if write_ordernet == True: 
        
@@ -1899,7 +1897,7 @@ def get_unassigned_aas(seqs_aas, pos_to_clustid, too_small = []):
 
 
 
-@njit
+#@njit
 def process_positions_numba(x, starting_clustid, ending_clustid, pos_to_clustid, cluster_order):
 
     pos_list = List()
@@ -1960,7 +1958,7 @@ def process_positions_numba(x, starting_clustid, ending_clustid, pos_to_clustid,
 
 
 
-@njit
+#@njit
 def get_ranges_numba(seqs_aas, cluster_order, starting_clustid, ending_clustid, pos_to_clustid):
 
     starting_clustid = -np.inf if not starting_clustid and starting_clustid != 0 else starting_clustid
@@ -2835,7 +2833,9 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     with ThreadPoolExecutor() as executor:
         all_gap_edgelists = list(executor.map(get_edges, unassigned))
     edgelist = [edge for gap_edgelist in all_gap_edgelists for edge in gap_edgelist]
-    print("Time getting gap edgelist parallel {}".format(time() - gap_time4))
+    print("Time getting gap edgelist parallel thread {}".format(time() - gap_time4))
+
+
 
 
     tp2 = time()
@@ -2874,7 +2874,6 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     #logging.debug("Time to do rbh {}".format(time() - address_time))
     #print("Time to do rbh {}".format(time() - address_time))
 
-    rbh_time2 = time()
     def process_subgraph(sub_G, I2, rbh_dict, pos_to_clustid, apply_walktrap):
     
         neighbors = {}
@@ -2894,7 +2893,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     
     
     
-    
+    rbh_time2 = time()   
     # Parallelize the loop using ThreadPoolExecutor
     with ThreadPoolExecutor() as executor:
         results = executor.map(
@@ -2919,6 +2918,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
         graphs.append(newer_G)
     
     print("Time to do rbh parallel {}".format(time() - rbh_time2))
+   
    
     
 
@@ -3208,7 +3208,7 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
         #def address_unassigned_aas(scope_aas, neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = True, rbh_dict = {}, args=None):
 
         # Avoid repeats of same rbh calculation
-        logging.debug(f"Time: Scope {scope_aas}")
+        #logging.debug(f"Time: Scope {scope_aas}")
         if not frozenset(scope_aas) in rbh_dict.keys():
             limited_I2 = {}
             # Suspect that this is slow
