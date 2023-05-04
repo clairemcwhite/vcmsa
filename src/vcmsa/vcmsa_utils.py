@@ -361,7 +361,7 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
 
     ctd_time = time()
     cluster_orders_dict, pos_to_clust, clustid_to_clust, dag_reached = clusters_to_dag(clusterlist, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
-    print(f"clusters_to_dag time {time() - ctd_time}")
+    #print(f"clusters_to_dag time {time() - ctd_time}")
     #print("clusterlist: \n", clusterlist)
     
     reach_dagtime = time()
@@ -375,11 +375,11 @@ def organize_clusters(clusterlist, seqs_aas, gapfilling_attempt,  minclustsize =
                return(1)
           cluster_orders_dict, pos_to_clust, clustid_to_clust,  dag_reached = clusters_to_dag(clusters_filt, seqs_aas, remove_both = True, gapfilling_attempt = gapfilling_attempt, minclustsize = minclustsize, all_alternates_dict = all_alternates_dict, args = args)
           dag_attempts = dag_attempts + 1
-    print(f"reach dag time {time() - reach_dagtime}")
+    #print(f"reach dag time {time() - reach_dagtime}")
 
     dtco_time = time()
     cluster_order, clustid_to_clust, pos_to_clustid =  dag_to_cluster_order(list(cluster_orders_dict.values()), seqs_aas, pos_to_clust, clustid_to_clust)
-    print(f"dag to cluster order {time() - dtco_time}")
+    #print(f"dag to cluster order {time() - dtco_time}")
 
 
     #GETTING EMPTY CLUSTER ORDER
@@ -1261,11 +1261,37 @@ def graph_from_rbh(rbh_list, directed = False):
 #### Beginning of Isabel's code for MNCM
 
 def processing(rbh_list):
+    """
+
+    Process a list of reciprocal best hits (RBH) to create a bipartite graph representation.
+
+
+
+    :param rbh_list: List of tuples containing pairs of RBH nodes (amino acids)
+
+    :type rbh_list: List[Tuple[Node, Node]]
+
+
+
+    :return: A tuple containing:
+
+        - types (List[int]): A list of sequence numbers (0 or 1) for each node in the bipartite graph
+
+        - indexed_edges_mod (List[Tuple[int, int]]): A list of unique edges represented by tuples of node indices
+
+        - layout (List[Tuple[int, int]]): A list of coordinates (x, y) for each node, where x represents the position along the sequence, and y represents the sequence number (0 or 1)
+
+        - names (List[Node]): A list of unique node names sorted by sequence number and position
+
+    :rtype: Tuple[List[int], List[Tuple[int, int]], List[Tuple[int, int]], List[Node]]
+
+    """
     # input: rbh_list
     # output: types,edges,layout,names
     types = []
     edges = []
     layout = []
+    weights = []
     rbh_list_mod = [(x[0],x[1]) for x in rbh_list if x[0].seqnum != x[1].seqnum]
     # Create a set to store the unique tuples
     rbh_list_noreps = set()
@@ -1276,72 +1302,134 @@ def processing(rbh_list):
         if tup not in rbh_list_noreps and (tup[1], tup[0]) not in rbh_list_noreps:
             # If it's not, add it to the unique set
             rbh_list_noreps.add(tup)
-    
     rbh_list_noreps = list(rbh_list_noreps)
+
     seq1 = [x[0] for x in rbh_list_noreps]
 
     seq2 = [x[1] for x in rbh_list_noreps]
 
+    # Sort all nodes by there position in the sequence
     all_nodes_seq1_sorted = sorted(seq1, key = lambda x : x.seqpos)
     all_nodes_seq2_sorted = sorted(seq2, key = lambda x : x.seqpos)
     # convert edgelist to node_id edges
     
-    
+    # sorted list of unique node names
     names = (sorted(list(set(all_nodes_seq1_sorted + all_nodes_seq2_sorted)), key = lambda x : (x.seqnum, x.seqpos)))
+
+    # a list of indexes of the same length of names
     indexes = list(x for x in range(len(names)))
 
+    # Dictionary to map between nodes and indices
     name_to_index = {names[i]: indexes[i] for i in range(len(names))}
 
     all_nodes = list(set(flatten(rbh_list_noreps)))
 
     all_seqnums = sorted(list(set([x.seqnum for x in all_nodes])))
-    #print(all_seqnums)
+
+    # extract all nodes and sort them by their sequence number
     all_seq1 = [x for x in all_nodes if x.seqnum == all_seqnums[0]]
     all_seq2 = [x for x in all_nodes if x.seqnum == all_seqnums[1]]
-    #print(all_seq1)
-    #print(all_seq2)
+
     types = [0]*len(all_seq1) + [1]*len(all_seq2)
     indexed_edges_mod =  [tuple(sorted((name_to_index[x], name_to_index[y]))) for (x,y) in rbh_list_noreps]
 
-    #creating layout
+    #creating graph layout
+    # Assigning x-coordinates as the position along the sequence and y-coordinates as the sequence number (0 or 1)
     for i in range(len(all_nodes_seq1_sorted)):
         layout.append((i,0))
     for i in range(len(all_nodes_seq2_sorted)):
         layout.append((i,1))
-    
     return(types, indexed_edges_mod, layout, names)
 
+
+def mnc_processing(rbh_list):
+    """
+    2-10x faster, but seqpositions doesn't match original
+    Processes a list of Reciprocal Best Hits (RBH) pairs and returns node types, edges, layout, and names.
+    Args:
+
+        rbh_list (list): A list of tuples containing pairs of RBHs (x, y) where x and y are objects with attributes
+                         'seqnum' (sequence number) and 'seqpos' (sequence position).
+    Returns:
+
+        types (list): A list of node types (0 or 1) based on the sequence number.
+        indexed_edges_mod (list): A list of edges represented as tuples of indices corresponding to the nodes in 'names'.
+        layout (list): A list of tuples representing the position of nodes in a 2D space (x, y).
+        names (list): A sorted list of unique nodes extracted from the input 'rbh_list'.
+    """
+
+    # Remove duplicate and self-matching pairs
+    rbh_list_mod = [(x[0],x[1]) for x in rbh_list if x[0].seqnum != x[1].seqnum]
+    # Create a set to store the unique tuples
+    rbh_list_noreps = set()
+
+    # Loop over each tuple in the list
+    for tup in rbh_list_mod:
+        # Check if the tuple is in the unique set, or if the reversed tuple is in the unique set
+        if tup not in rbh_list_noreps and (tup[1], tup[0]) not in rbh_list_noreps:
+            # If it's not, add it to the unique set
+            rbh_list_noreps.add(tup)
+    rbh_list_noreps = list(rbh_list_noreps)
+
+
+
+    # Sort nodes by sequence number and position
+    names = sorted(set(x for pair in rbh_list_noreps for x in pair), key=lambda x: (x.seqnum, x.seqpos))
+
+    # Create a mapping from node names to indices
+    name_to_index = {name: idx for idx, name in enumerate(names)}
+
+    # Convert the edge list to indices
+    indexed_edges_mod = [tuple(sorted((name_to_index[x], name_to_index[y]))) for x, y in rbh_list_noreps]
+
+    types, layout, seq_positions = [], [], []
+
+    # Assigning x-coordinates as the position along the sequence and y-coordinates as the sequence number (0 or 1)
+    for i, node in enumerate(names):
+        types.append(node.seqnum)
+        seq_positions.append(node.seqpos)
+
+    types = [0 if x == min(types) else 1 for x in types]    
+    layout = list(zip(seq_positions, types))  
+     
+    return types, indexed_edges_mod, layout, names
+
+
+
+
+
 def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
-    #print("in graph_from_hits_noncrossing")
+    #print(f"original rbh {rbh_list[0:5]}")
+
     new_rbh = []
     for (first,second,score) in rbh_list:
         if first.seqaa == "X" or second.seqaa == "X":
             continue
         else:
             new_rbh.append((first,second,score))
-
     rbh_list = new_rbh
 
+    # These all come out in reversed order from the original rbh_list
+    time1 = time()
     types,edges,layout,names = processing(rbh_list)
-    #print('graph being made in hits_noncrossing')
-    #print("printing types: \n", types)
-    #print("printing edges: \n", edges)
+    #print(f"orig_processing {time() - time1}")
+    time2 = time()
+
     G = igraph.Graph.Bipartite(types=types,edges=edges)
-    #print("graph made")
+
 
     weights = [x[2] for x in rbh_list]
-    G.es['weight'] = weights
+    G.es['weight'] = weights[::-1]
     G.vs['name'] = names
-    G = G.simplify(combine_edges = "first")
     if G.vcount() != 0:
         if wmnc:
-            #print("doing weighted labeling")
+            logging.info("doing weighted labeling")
             labeled_G,k_list = labeling_weighted(G)
             #print("doing weighted edge selection")
             final, soln_found = edge_selection_weighted(labeled_G, k_list, [])
 
         else:
-            #print("doing labeling not weighted")
+            logging.info("doing labeling unweighted")
             labeled_G,k = labeling(G)
             #print("doing edge selection not weighted")
             final, soln_found = edge_selection(labeled_G, k, [])
@@ -1357,11 +1445,8 @@ def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
             final_edges = [final_edges]
  
         final_G = igraph.Graph.Bipartite(types=types,edges=final_edges)
-
-        final_G.es['weight'] = weights
+        final_G.es['weight'] = weights[::-1]
         final_G.vs['name'] = names
-        final_G = final_G.simplify(combine_edges = "first")
-
         return(final_G)
     else: 
         return(G)

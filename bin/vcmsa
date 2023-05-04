@@ -444,9 +444,10 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     # 
     #for x in hitlist_all:
     #   logging.debug("hitlist_all: {}".format(x))
-    hitlist_all = get_besthits(I2, minscore = 0.7) # No threshold for first clustering? Change to zero 
+    #hitlist_all = get_besthits(I2, minscore = 0.7) # No threshold for first clustering? Change to zero 
+    #print(hitlist_all)
     #new_hitdict = get_besthits(I2, minscore = 0.5) #added threshold of 0.5
-    new_hitdict = get_besthits(I2, minscore = 0)
+    new_hitdict = get_besthits(I2, minscore = 0.7)
     #print("printing new_hitdict: \n", new_hitdict)
     graphs = []
     for k,v in new_hitdict.items():
@@ -475,6 +476,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             logging.info("doing weighted maximum non crossing")
             graphs.append(G) 
         elif mnc == True:
+            #print("rbh after mnc", new_rbh)
             logging.info("doing unweighted maximum non crossing")
             G = graph_from_hits_noncrossing(new_rbh)
             graphs.append(G)
@@ -483,17 +485,25 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             graphs.append(G)
 
     #merge the graphs into one
+    # This can be slow for large networks
+
+    union_time = time()
+    # potentially keep as rbh_list instead of G, to avoid igraph union slowness
     G = igraph.union(graphs, byname=True)
+    # Can be half a second
+    print(f"Time for initial union {time() - union_time}")
 
-    
-
-
+    #print(G)
+    #print(G.es['weight'])
     #add commandline argument to stop here
-    if rbh_outfile:
+    if True: #rbh_outfile:
+           rbh_outfile = "tester.csv"
            with open(rbh_outfile, "a") as fOut:
                 for e in G.es:
+                   
                     source_name = G.vs[e.source]['name']
                     target_name = G.vs[e.target]['name']
+                    #print(source_name, target_name, e['weight']) 
                     outstring = "{},{},{},{},{},{}\n".format(fasta_path, source_name.seqnum, target_name.seqnum, source_name, target_name, e['weight'])
                     fOut.write(outstring)
     if rbh_only:
@@ -867,14 +877,14 @@ if __name__ == '__main__':
 
     else:
         seqlens = [len(x) for x in seqs]
-        #print("printing model_name:")
-        #print(model_name)
-        #print("printing seq_lens")
-        #print(seqlens)
-        #print("printing layers")
-        #print(layers)
-        #print("printing padding")
-        #print(padding)
+        print("printing model_name:")
+        print(model_name)
+        print("printing seq_lens")
+        print(seqlens)
+        print("printing layers")
+        print(layers)
+        print("printing padding")
+        print(padding)
         #print("printing headnames")
         #print(headnames)
         embedding_dict = get_embeddings(seqs_spaced,
