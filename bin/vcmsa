@@ -496,9 +496,11 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     #print(G)
     #print(G.es['weight'])
     #add commandline argument to stop here
-    if True: #rbh_outfile:
+    print('IN NEW VERSION')
+   
+    if rbh_outfile:
            rbh_outfile = "tester.csv"
-           with open(rbh_outfile, "a") as fOut:
+           with open(rbh_outfile, "w") as fOut:
                 for e in G.es:
                    
                     source_name = G.vs[e.source]['name']
