@@ -115,8 +115,11 @@ def get_align_args():
                         help="If flagged, stop after calculating sequence similarities (requires --sim_outfile)")  
     
     parser.add_argument("-sout", "--sim_outfile", dest = "sim_outfile", type = str, required = False,
-                        help="Path to save sequence similarities, optional. If not present, sequence similarities won't be saved")  
-                        
+                        help="Path to save sequence similarities, optional. If not present, sequence similarities won't be saved")
+
+    parser.add_argument("-zc", "--zero_center", dest = "zero_center", action = "store_true", 
+                        help="If added, do zero centering on sequences in batch correction, rather than running ComBat (requires --batch_correct)")
+
     args = parser.parse_args()
 
     return(args)
@@ -125,7 +128,6 @@ def get_align_args():
  
 @profile
 def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75, pca_plot = False):
-
     aa_embeddings = embedding_dict['aa_embeddings'] # this is numseqs x padded_seqlen x embedding_dim
     padded_seqlen = aa_embeddings.shape[1]
 
@@ -356,6 +358,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
     record_dir = args.record_dir
     outfile_name = args.outfile_name
     batch_correct = args.batch_correct
+    zero_center = args.zero_center
     seqlens = [len(x) for x in seqs]
     #ic("seqs", seqs, seqlens)
     max_iterations = args.max_iterations # default 100
@@ -391,8 +394,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list, logging, minscore1 = 0.5, ali
 
     if batch_correct:
         #ic( list(range(len(seqs_aas)))) 
-        hidden_states = do_batch_correct(hidden_states, list(range(len(seqs_aas))), batch_list)
-       
+        hidden_states = do_batch_correct(hidden_states, list(range(len(seqs_aas))), batch_list, zero_center)
         if pca_plot:
             png_hidden_out = "{}/{}.alignment_group{}.postbatch.png".format(record_dir, outfile_name, alignment_group)
             do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)

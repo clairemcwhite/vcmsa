@@ -800,7 +800,7 @@ def reshape_flat(hstates_list):
     return(hidden_states)
 
 #@profile
-def do_batch_correct(hidden_states, levels, batch_list):
+def do_batch_correct(hidden_states, levels, batch_list, zero_center = False):
     #normalize this df for batch correction
     #if we normalize we need to transform normalized embeddings. 
     #or do the transformed normalized embeddings also work?
@@ -810,14 +810,17 @@ def do_batch_correct(hidden_states, levels, batch_list):
     # print("printing hidden states: \n")
     # print(hidden_states_normalized_array)
     # print("printing hidden states shape: \n", hidden_states_normalized_array.shape)
-    hidden_states_normalized_pd = pd.DataFrame(preprocessing.normalize(hidden_states.T))
-   
-   
+
    #ZERO CENTERING
     # print("finding the mean")
+    if zero_center:
 
-    # row_means = np.mean(hidden_states, axis=1)
-    # zero_centered_arr = hidden_states - row_means.reshape(-1, 1)
+        row_means = np.mean(hidden_states, axis=1)
+        zero_centered_arr = hidden_states - row_means.reshape(-1, 1)
+        print("printing zero_centered_arr")
+        print(zero_centered_arr)
+        print(zero_centered_arr.shape)
+        # center_function = lambda x: x - hidden_states.mean()
     # print(zero_centered_arr)
 
 
@@ -843,24 +846,31 @@ def do_batch_correct(hidden_states, levels, batch_list):
     #normalization
     
     #batch_list tells which sequence each aa comes from
-    batch_series = pd.Series(batch_list)
-    # batch_df = pd.DataFrame(batch_series, columns=["batch"])
-    # print("printing batch_df \n", batch_df)
+    else:
+        hidden_states_normalized_pd = pd.DataFrame(preprocessing.normalize(hidden_states.T))
 
-    #levels = list(range(len(seqs_aas)))
-    design_list = [(batch_series == level) * 1 for level in levels]
-    design = pd.concat(design_list, axis = 1)
-    # print("printing design:\n", design)
+        batch_series = pd.Series(batch_list)
+        # batch_df = pd.DataFrame(batch_series, columns=["batch"])
+        # print("printing batch_df \n", batch_df)
+
+        #levels = list(range(len(seqs_aas)))
+        design_list = [(batch_series == level) * 1 for level in levels]
+        design = pd.concat(design_list, axis = 1)
+        # print("printing design:\n", design)
 
 
-    hidden_states_batch = combat(hidden_states_normalized_pd, batch_list, design)
-    #print("about to run harmony")
-    ##hidden_states_batch_harmony = harmonize(hidden_states_normalized_array, batch_df, batch_key = 'batch')
-   # print("harmony ran")
-    #print("harmony output: \n", hidden_states_batch_harmony)
-    #ic(hidden_states_batch)
-    hidden_states_corrected = np.array(hidden_states_batch).T.astype(np.float32)
-    ##hidden_states_corrected_harmony = np.ascontiguousarray(hidden_states_batch_harmony.astype(np.float32))
+        hidden_states_batch = combat(hidden_states_normalized_pd, batch_list, design)
+        #print("about to run harmony")
+        ##hidden_states_batch_harmony = harmonize(hidden_states_normalized_array, batch_df, batch_key = 'batch')
+    # print("harmony ran")
+        #print("harmony output: \n", hidden_states_batch_harmony)
+        #ic(hidden_states_batch)
+        hidden_states_corrected = np.array(hidden_states_batch).T.astype(np.float32)
+        ##hidden_states_corrected_harmony = np.ascontiguousarray(hidden_states_batch_harmony.astype(np.float32))
+        print("printing hidden_states_corrected")
+        print(hidden_states_corrected)
+        print(hidden_states_corrected.shape)
+        
     return(hidden_states_corrected)
 
 
