@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "vcMSA figures"
 output: html_document
 ---
 
@@ -7,7 +7,7 @@ output: html_document
 
 Figures and analysis accompanying
 "Vector-clustering Multiple Sequence Alignment: Aligning into the twilight zone of protein sequence similarity with protein language models"
-Claire McWhite & Mona Singh
+Claire McWhite, Isabel Armour-Garb, & Mona Singh
 
 
 Set up
@@ -20,8 +20,7 @@ library(plotly)
 library(ggridges)
 theme_set(theme_cowplot(font_size = 8))
 
-
-#0 = orange, 1 = lightblue, 2 = green, 3  = yellow, 4 = blue, 5 = red, 6 = pink, 7 = gray
+#1 = orange, 2 = lightblue, 3 = green, 4  = yellow, 5 = blue, 6 = red, 7 = pink, 8 = gray
 palette_OkabeIto <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
 colorspace::swatchplot(palette_OkabeIto)
 
@@ -56,15 +55,23 @@ read_fasta <- function(fasta_filename, annot = FALSE){
 Analysis for Figure 2A & B
 ```{r}
 
-files <- fs::dir_ls("/scratch/gpfs/cmcwhite/aln_datasets/model_training_prots/",glob = "*.filt.fasta.t5.16layers.padding0.nobc.csv")# %>% head(200)
+files <- fs::dir_ls("/scratch/gpfs/ia3026/vcmsa_tests/mnc_final/",glob = "*.csv")# %>% head(200)
 
 dat <- read_csv(files, id="path",  show_col_types = FALSE, col_names = c("fasta", "seq1", "seq2", "aa1", "aa2", "sim"))
 
 
 
-dat_formatted <- dat %>%
+dat_formatted_fwd <- dat %>%
   mutate(path  = basename(path)) %>%
-  separate(path, into = c("protein", NA, NA, "model", "layers", "padding", "bc", NA), sep= "[.]")
+  separate(path, into = c("protein"), sep= "[.]")  %>% filter(seq1 == 0 & seq2 == 1 )
+
+dat_formatted_rev <- dat %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein"), sep= "[.]")  %>% filter(seq1 == 1 & seq2 == 0 ) %>% rename_at(vars(seq1, seq2), ~ if_else(. == "seq1", "seq2", "seq1")) %>% rename_at(vars(aa1, aa2), ~ if_else(. == "aa1", "aa2", "aa1"))
+
+
+
+dat_formatted <- rbind(dat_formatted_fwd, dat_formatted_rev)
 
 refs <- read_csv("/scratch/gpfs/cmcwhite/aln_datasets/quantest2/QuanTest2/Labels/match_positions_both.csv", col_names = c("protein", "aa1", "aa2", "label"))
 
@@ -80,78 +87,32 @@ total_aligned_positions <- refs %>%
 dat_formatted_ref <- dat_formatted %>%
   left_join(refs)
 
-#protein_sel <- dat_formatted_ref %>% select(protein) %>%  unique %>% sample_n(100) %>% pull(protein)
-  
-dat_evaluated_aa1 <- dat_formatted_ref %>%
- # filter(protein %in% protein_sel)  %>%
-   arrange(desc(sim))%>%
 
-  group_by(protein, aa1, model, padding, bc) %>%
-    mutate(rank_aa1 = row_number()) %>%
-  ungroup %>%
-  filter(rank_aa1 == 1)
-  
-dat_evaluated_aa2 <- dat_formatted_ref %>%
- # filter(protein %in% protein_sel)  %>%
-   arrange(desc(sim))%>%
+dat_evaluated <- dat_formatted_ref %>% filter(label == 1)
 
-  group_by(protein, aa2, model, padding, bc) %>%
-    mutate(rank_aa2 = row_number()) %>%
-  ungroup %>%
-  filter(rank_aa2 == 1)
-  
-
-dat_evaluated_rbh <- dat_evaluated_aa1 %>%
-  full_join(dat_evaluated_aa2 ) %>%
-     rowwise() %>%
-  mutate(true_rbh = case_when(label == 1 && rank_aa1 == 1 &&  rank_aa2 == 1 ~ "true_rbh"))
-
-
-# Check for first position
-dat_evaluated_rbh %>%
-  group_by(label, model, padding, bc) %>%
+dat_evaluated %>%
+  group_by(label) %>%
      summarize(mean = mean(sim))
 
-dat_evaluated_rbh %>%
-  group_by(label, model, padding, bc, true_rbh) %>%
-     summarize(n = n()) %>%
-  filter(true_rbh == "true_rbh")
+dat_evaluated %>%
+  group_by(label) %>%
+     summarize(n = n())
 
-bc_eval <- dat_evaluated_rbh %>%
+bc_eval <- dat_evaluated %>%
   filter(label ==1) %>%
-  filter(true_rbh == "true_rbh") %>%
-  group_by(protein, label, model, padding, bc, true_rbh) %>%
-     summarize(n = n()) 
+  group_by(protein, label) %>%
+  summarize(n = n()) 
 ```
 
 
 
-Test files
+Figure 2A and 2B
 ```{r}
-#directory_fasta <- "/scratch/gpfs/cmcwhite/aln_datasets/model_training_prots/"
-#fasta_files <- fs::dir_ls(directory_fasta, glob= "**fasta")
-
-#homstrad_fastas <- map_dfr(fasta_files, ~read_fasta(paste0(.)), .id = "fasta") 
-
 theme_set(theme_cowplot(font_size = 8))
-
-
-#prot_lengths <- homstrad_fastas %>%
-#    mutate(length = str_length(Sequence)) %>%
-#  select(-Sequence) %>%
-#  group_by(fasta) %>%
-#      mutate(row = row_number()) %>%
-#  #filter(row == 1) %>%
-#  ungroup %>%
-#  mutate(protein = basename(fasta)) %>%
-#  mutate(protein = str_replace(protein, ".filt.fasta", "")) %>%
-#  select(-fasta)
-
 # Figure 2A
 correct_pos<- bc_eval %>%
   left_join(total_aligned_positions) %>%
   mutate(prop_correct = n/aligned_positions) %>%
-  filter(padding == "padding0") %>%
      ggplot(aes(x= prop_correct)) +
         geom_histogram(binwidth = 0.05) +
   scale_y_continuous(expand = c(0,0)) +
@@ -159,7 +120,7 @@ correct_pos<- bc_eval %>%
  
   xlab("Proportion correct positions") +
   ylab("Count of proteins")
-
+correct_pos
 
 
 # In text value of number of alignments over where >50% of aligned columns are also reciprocal best hits
@@ -171,27 +132,18 @@ num_aligns_over_0.5correct <- bc_eval %>%
   nrow()
 
 
-# 93.2
+# 93.04
 num_aligns_over_0.5correct/num_aligns
 
 
 homstrad_sims <- read_csv("/scratch/gpfs/cmcwhite/aln_datasets/homstrad_aln_sims.csv") %>%
   mutate(protein = str_replace(file, ".filt.aln", "")) %>% select(-file)
-# Do similarity 
-
-
-# Figure out when batch_correction is useful
-#COX2 155-162
-#ACT 52-57
-#adeno_fiber 109-112
-#capsid_n 52-55
 
 # Figure 2B
 sim_correct_plot <- bc_eval %>%
   left_join(total_aligned_positions) %>%
   mutate(prop_correct = n/aligned_positions) %>%
   left_join(homstrad_sims)%>%
-  filter(padding == "padding0") %>%
      ggplot(aes(x= same, y =  prop_correct, label = protein)) +
         geom_point(color = "grey50", alpha = 0.6, size = 1) +
   ylab("Proportion correct positions") +
@@ -201,17 +153,8 @@ sim_correct_plot <- bc_eval %>%
 sim_correct_plot
 
 Figure2 <- plot_grid(correct_pos, sim_correct_plot, labels= c("A", "B"), label_size = 8)
-Figure2 %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.png", ., height = 2, width = 4,, units = "in", dpi = 600)
-Figure2 %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.pdf", ., height = 2, width = 4, units = "in")
-
-# In text value
-bc_eval %>%
-  left_join(prot_lengths) %>%
-   mutate(prop_correct = n/length) %>%
-  filter(prop_correct >= 0.5)
-
-median(tmp$prop_correct)
-
+# Figure2 %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.png", ., height = 2, width = 4,, units = "in", dpi = 600)
+# Figure2 %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.pdf", ., height = 2, width = 4, units = "in")
 
 ```
 
@@ -237,8 +180,6 @@ length_diffs <- map_dfr(fasta_files, ~read_fasta(paste0(.)), .id = "fasta") %>%
   mutate(abs_log2fc = abs(log2diff)) %>% arrange(desc(abs_log2fc))
 
 extreme_length_diffs <- length_diffs %>% filter(abs_log2fc >= 2) %>% pull(prot)
-
-
 
 ```
 
@@ -383,7 +324,7 @@ perform_plot <-layer_compare_compare %>%
   xlab("Column score") +
   ylab("vcMSA\nColumn score") + 
    geom_vline(xintercept = 0, color = "red", linetype = "dashed") + 
-  scale_color_continuous_sequential(palette = "viridis", name = "Sequence\nidentity", rev = FALSE)+
+  scale_color_continuous_sequential(palette = "viridis", name = "Sequence\nidentity", rev = FALSE) +
   scale_y_continuous(limits = c(-.1, 150.1), expand = c(0,0)) +
     scale_x_continuous(limits = c(-70.7,70.7), expand = c(0,0)) +
  facet_wrap(~fct_relevel(alg, order2)) +
@@ -611,7 +552,7 @@ left_join(struc_scores, by = c("alg", "identbin2")) %>%
 fig3bc <- plot_grid(ident_plot, plot_ss, nrow = 1, rel_widths = c(0.43,0.7))
 
 
-fig3bc %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/fig3bc.png", ., height = 1.5, width = 6,, units = "in", dpi = 600)
+fig3bc %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/fig3bc.png", ., height = 1.5, width = 6, units = "in", dpi = 600)
 fig3bc%>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/fig3bc.pdf", ., height = 1.5, width = 6, units = "in")
 
 
@@ -744,4 +685,189 @@ traces_sel <- traces %>% separate(filename, into = c(NA, NA, NA, NA, NA, NA, NA,
 ```
 
 
+Supplemental true/false positives figure
+Demonstrates benefit of maximum noncrossing matching
+```{r}
+#"mncm" refers to maximum noncrossing matching and "none" refers to no maximum noncrossing matching
+files_none <- fs::dir_ls("/scratch/gpfs/ia3026/vcmsa_tests/none_final/",glob = "*.csv")# %>% head(200)
+
+dat_none <- read_csv(files_none, id="path",  show_col_types = FALSE, col_names = c("fasta", "seq1", "seq2", "aa1", "aa2", "sim"))
+
+
+
+dat_formatted_fwd_none <- dat_none %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein"), sep= "[.]")  %>% 
+  filter(seq1 == 0 & seq2 == 1 )
+
+dat_formatted_rev_none <- dat_none %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein"), sep= "[.]")  %>% filter(seq1 == 1 & seq2 == 0 ) %>% 
+  rename_at(vars(seq1, seq2), ~ if_else(. == "seq1", "seq2", "seq1")) %>% 
+  rename_at(vars(aa1, aa2), ~ if_else(. == "aa1", "aa2", "aa1"))
+
+
+
+dat_formatted_none <- rbind(dat_formatted_fwd_none, dat_formatted_rev_none)
+
+dat_formatted_ref_none <- dat_formatted_none %>%
+  left_join(refs)
+
+
+none_lab1 <- subset(dat_formatted_ref_none, label == 1)
+none_lab1$set = "none_1"
+mncm_lab1 <- subset(dat_formatted_ref, label==1)
+mncm_lab1$set = "mncm_1"
+none_labNA <- subset(dat_formatted_ref_none, is.na(label))
+none_labNA$set = "none_NA"
+mncm_labNA <- subset(dat_formatted_ref, is.na(label))
+mncm_labNA$set = "mncm_NA"
+
+mncm_1_median <-  median(mncm_lab1$sim, na.rm=TRUE)
+mncm_NA_median <-  median(mncm_labNA$sim, na.rm=TRUE)
+none_1_median <-  median(none_lab1$sim, na.rm = TRUE)
+none_NA_median <-  median(none_labNA$sim, na.rm = TRUE)
+
+alldat <- bind_rows(none_lab1, mncm_lab1) %>% 
+  mutate(label = case_when(set == "mncm_1" ~ "mncm",
+                           set == "none_1" ~ "No mncm"))
+
+alldat_0 <- bind_rows(none_labNA, mncm_labNA) %>%
+  mutate(label = case_when(set == "mncm_NA" ~ "mncm",
+                           set == "none_NA" ~ "No mncm")) 
+
+a <- alldat %>%
+  ggplot(aes(sim, fill=label)) +
+  geom_histogram(binwidth = 0.01) +
+  facet_grid(~fct_rev(label)) + 
+  theme(strip.background = element_rect(fill = "white"), legend.position="none") + 
+  xlab("Cosine similarity") + 
+  ylab("Count") +
+  ggtitle("True positive RBHs") +  
+  scale_fill_manual(values=c(palette_OkabeIto[1], palette_OkabeIto[2])) + 
+  geom_vline(data = alldat[alldat$set == "none_1",], aes(xintercept=none_1_median), colour="black", linetype="dashed") + 
+  geom_vline(data = alldat[alldat$set == "mncm_1",], aes(xintercept=mncm_1_median), colour="black", linetype="dashed") +
+  xlim(0.5, 1)
+a
+
+b <- alldat_0 %>% 
+  ggplot(aes(sim, fill=label)) +
+  geom_histogram(binwidth = 0.01) +
+  facet_grid(~fct_rev(label)) + 
+  theme(strip.background = element_rect(fill = "white"),  legend.position="none") + 
+  xlab("Cosine similarity") + 
+  ylab("Count") +ggtitle("False positive RBHs") +  
+  scale_fill_manual(values=c(palette_OkabeIto[1], palette_OkabeIto[2])) + 
+  geom_vline(data = alldat_0[alldat_0$set == "none_NA",], aes(xintercept=none_NA_median), colour="black", linetype="dashed") + 
+  geom_vline(data = alldat_0[alldat_0$set == "mncm_NA",], aes(xintercept=mncm_NA_median), colour="black", linetype="dashed") +
+  xlim(0.5, 1)
+b
+
+figure <- plot_grid(a, b, ncol = 1, labels = c("A", "B"), align = "v")
+figure
+
+# figure %>% ggsave("/scratch/gpfs/ia3026/hist.png", ., height=3, width = 3.5, units = "in", dpi = 600)
+# figure %>% ggsave("/scratch/gpfs/ia3026/hist.pdf", ., height=3, width = 3.5, units = "in")
+```
+
+Supplemental batch correction figure
+```{r}
+files_bc_combat <- fs::dir_ls("/scratch/gpfs/ia3026/vcmsa_tests/bc_combat_mnc/",glob = "*.csv")
+
+dat_bc_combat <- read_csv(files_bc_combat, id="path",  show_col_types = FALSE, col_names = c("fasta", "seq1", "seq2", "aa1", "aa2", "sim"))
+
+dat_formatted_fwd_bc <- dat_bc_combat %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein"), sep= "[.]")  %>% 
+  filter(seq1 == 0 & seq2 == 1 )
+
+dat_formatted_rev_bc <- dat_bc_combat %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein"), sep= "[.]")  %>% filter(seq1 == 1 & seq2 == 0 ) %>% 
+  rename_at(vars(seq1, seq2), ~ if_else(. == "seq1", "seq2", "seq1")) %>% 
+  rename_at(vars(aa1, aa2), ~ if_else(. == "aa1", "aa2", "aa1"))
+
+
+
+dat_formatted_bc_combat <- rbind(dat_formatted_fwd_bc, dat_formatted_rev_bc)
+dat_formatted_ref_bc_combat <- dat_formatted_bc_combat %>%
+  left_join(refs)
+
+
+dat_evaluated_rbh_bc_combat <- dat_formatted_ref_bc_combat %>% filter(label == 1)
+  #rowwise() %>%
+  #mutate(true_rbh = case_when(label == 1 && rank_aa1 == 1 &&  rank_aa2 == 1 ~ "true_rbh"))
+
+
+# Check for first position
+dat_evaluated_rbh_bc_combat %>%
+  group_by(label) %>%
+  summarize(mean = mean(sim))
+
+dat_evaluated_rbh_bc_combat %>%
+  group_by(label) %>%
+  summarize(n = n()) #%>%
+  #filter(true_rbh == "true_rbh")
+
+
+bc_eval_bc_combat <- dat_evaluated_rbh_bc_combat %>%
+  filter(label ==1) %>%
+  #filter(true_rbh == "true_rbh") %>%
+  group_by(protein, label) %>%
+  summarize(n = n())
+
+
+bc_eval_bc_combat$set <- "BC"
+
+counts <- data.frame(table(dat_formatted_ref_bc_combat$protein)) 
+colnames(counts) <- c("protein", "freq")
+total_df_bc <- left_join(bc_eval_bc_combat, counts)
+
+bc_eval$set <- "MNCM"
+
+counts <- data.frame(table(dat_formatted_ref$protein)) 
+colnames(counts) <- c("protein", "freq")
+total_df <- left_join(bc_eval, counts)
+
+precision_df <- bind_rows(total_df_bc, total_df)
+recall_df <- bind_rows(bc_eval_bc_combat %>%
+  left_join(total_aligned_positions), bc_eval %>%
+  left_join(total_aligned_positions)) %>% mutate(prop_correct=n/aligned_positions)
+
+#adding in seq sim information before batch correction
+files_seqsim <- fs::dir_ls("/scratch/gpfs/ia3026/vcmsa_tests/seqsim/",glob = "*.csv")
+
+dat_seqsim <- read_csv(files_seqsim, id="path",  show_col_types = FALSE)
+
+dat_formatted_seqsim <- dat_seqsim %>%
+  mutate(path  = basename(path)) %>%
+  separate(path, into = c("protein"), sep= "[.]") %>% filter(seq1 == 0 & seq2 == 1 )
+
+prec_rec_df <- full_join(precision_df, recall_df, by = c('protein', 'set'), suffix = c("_precision", "_recall")) %>%
+  merge(dat_formatted_seqsim) %>% mutate(f1 = 2*(prop_correct* prop_correct)/ (prop_correct + prop_correct))
+
+
+prec_rec_sims <- left_join(prec_rec_df, homstrad_sims) 
+
+f1_supp <- prec_rec_sims%>% filter(set %in% c("MNCM", "BC")) %>% select(protein, f1, set, same, seqsim, sim) %>%
+  pivot_wider(names_from = "set", values_from = "f1") %>% mutate(diff = BC - MNCM) %>%
+  mutate(above_zero = case_when(diff >= 0 ~ TRUE, diff <0 ~ FALSE)) %>%
+  ggplot(aes(x=seqsim, y=diff, label=protein, color = above_zero)) + 
+  geom_point(alpha=0.7) + xlab("Cosine similarity") + ylab("Batch corrected - uncorrected \n (F1 score)") +
+  geom_vline(xintercept = 0.95, linetype="dashed") +
+  geom_hline(yintercept = 0, linetype="dashed") +
+  scale_color_manual(values = c(palette_OkabeIto[6], palette_OkabeIto[5])) + 
+  theme(legend.position="none") 
+f1_supp
+
+f1_supp_df <-  prec_rec_sims %>% 
+  filter(set %in% c("MNCM", "BC")) %>% 
+  select(protein, f1, set, same, seqsim, sim) %>%
+  pivot_wider(names_from = "set", values_from = "f1") %>% mutate(diff = BC - MNCM) %>%
+  mutate(above_zero = case_when(diff >= 0 ~ TRUE, diff <0 ~ FALSE))
+
+# f1_supp %>% ggsave("/scratch/gpfs/ia3026/f1_supp.png", ., height=2, width = 2.5, units = "in", dpi = 600)
+# f1_supp %>% ggsave("/scratch/gpfs/ia3026/f1_supp.pdf", ., height=2, width = 2.5, units = "in")
+
+```
 
