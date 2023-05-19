@@ -1027,6 +1027,7 @@ def do_batch_correct(hidden_states, levels, batch_list, zero_center = False):
         print("printing zero_centered_arr")
         print(zero_centered_arr)
         print(zero_centered_arr.shape)
+        return(zero_centered_arr)
         # center_function = lambda x: x - hidden_states.mean()
     # print(zero_centered_arr)
 
@@ -1078,7 +1079,7 @@ def do_batch_correct(hidden_states, levels, batch_list, zero_center = False):
         print(hidden_states_corrected)
         print(hidden_states_corrected.shape)
         
-    return(hidden_states_corrected)
+        return(hidden_states_corrected)
 
 
 
