@@ -57,7 +57,7 @@ pip install vcmsa
 or 
 
 ```bash
-onda create --prefix vcmsa_env --file vcmsa/environment.txt 
+conda create --prefix vcmsa_env --file vcmsa/environment.txt 
 
 conda activate vcmsa_env
 easy_install install vcmsa
