@@ -8,9 +8,10 @@ VcMSA uses protein language models to allow alignment of protein sets with conse
 
 This is an alpha version of the algorithm code that functions as a proof-of-concept, expect later optimization for speed and efficiency
 
-## Currently out of sync with biorxiv produced alignments (with worse output). To match, use github.com/clairemcwhite/transformer_infrastructure/hf_aligner2.py
 
 [Project Github repo](https://github.com/clairemcwhite/vcmsa)
+
+[Colab notebook](https://colab.research.google.com/drive/1h8WcsMzi8pYr-O3jW03knt7ePcv22o-F?authuser=1#scrollTo=oVkGfduwiAkw)
 
 #### Authors
 Claire D. McWhite
@@ -43,26 +44,32 @@ model.save_pretrained('prot_t5_xl_uniref50')
 ```
 
 
-### Make conda environment
-- bash vcmsa/make_vcmsa_env.sh 
-
 
 ### Installation
 vcmsa can be directly installed with [sudo permission] from pypi
 
 ```bash
+conda create --prefix vcmsa_env --file vcmsa/environment.txt
+conda activate vcmsa_env
 pip install vcmsa 
 ```
 
 or 
 
 ```bash
+conda create --prefix vcmsa_env --file vcmsa/environment.txt 
+
+conda activate vcmsa_env
 easy_install install vcmsa
 ```
 Alternatively, vcmsa can also be installed from source. 
 
 ```bash
-git clone https://github.com/clairemcwhite/vcmsa.git
+git clone --branch main --quiet https://github.com/clairemcwhite/vcmsa.git
+
+conda create --prefix vcmsa_env --file vcmsa/environment.txt
+
+conda activate vcmsa_env
 cd vcmsa
 python setup.py install
 #or 
