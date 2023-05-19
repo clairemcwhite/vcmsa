@@ -18,6 +18,7 @@ library(colorspace)
 library(cowplot)
 library(plotly)
 library(ggridges)
+library(fs)
 theme_set(theme_cowplot(font_size = 8))
 
 #1 = orange, 2 = lightblue, 3 = green, 4  = yellow, 5 = blue, 6 = red, 7 = pink, 8 = gray
@@ -153,8 +154,8 @@ sim_correct_plot <- bc_eval %>%
 sim_correct_plot
 
 Figure2 <- plot_grid(correct_pos, sim_correct_plot, labels= c("A", "B"), label_size = 8)
-# Figure2 %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.png", ., height = 2, width = 4,, units = "in", dpi = 600)
-# Figure2 %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.pdf", ., height = 2, width = 4, units = "in")
+Figure2 %>% ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.png", ., height = 2, width = 4,, units = "in", dpi = 600)
+Figure2 %>%  ggsave("/scratch/gpfs/cmcwhite/aln_comparison/figures/Figure2.pdf", ., height = 2, width = 4, units = "in")
 
 ```
 
@@ -204,7 +205,7 @@ allscores <- read_csv("/scratch/gpfs/cmcwhite/aln_comparison/eval_scores.csv", c
 allscores_standard <- allscores %>%
   mutate(score_type = str_replace(score_type, "_", "")) %>%
   filter(score_type %in% c("sp", "tc", "col", "tcHGI", "tcHGIEB")) %>%
-  separate(experiment, into = c("tmp0", "tmp1", 'set', "tmp2", 'layers', 'model'), sep = "_", extra = "merge", remove = FALSE) %>%
+  separate(experiment, into = c("tmp0", "tmp1", 'set', "tmp2", 'layers', 'model', 'padding', 'threshold', 'bc', 'rbh', '), sep = "_", extra = "merge", remove = FALSE) %>%
   separate(prot , into = c("prot", "style", "tmp4", "alg"), extra = "drop", sep = "[.]") %>%
   mutate(layers = case_when(is.na(layers) ~ "None", TRUE ~ layers)) %>%
   mutate(model = case_when(is.na(model) ~ "None", TRUE ~ model))  %>%
@@ -217,12 +218,16 @@ allscores_standard <- allscores %>%
   mutate(score= as.numeric(score))# %>%
 
 
-
+aln_evaluate_20_nopca_16layer_t5_padding10_thr70_nobc_mnc_oldclust
 ```
 
 
 
+```{r}
+allscores_standard %>% filter(experiment %in% c(""))
 
+
+```
 
 Secondary structure measure 
 ```{r}

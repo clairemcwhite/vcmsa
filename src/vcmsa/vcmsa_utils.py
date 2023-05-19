@@ -1821,6 +1821,7 @@ def candidate_to_remove(G, v_names,z = -5):
 
 
     weights = {}
+    means = {}
     num_prots = len(G.vs())
     #ic("num_prots")
     if num_prots <=3:
@@ -1829,7 +1830,9 @@ def candidate_to_remove(G, v_names,z = -5):
     for i in v_names:
         g_new = G.copy()
         vs = g_new.vs.find(name = i)
-        weight = sum(g_new.es.select(_source=vs)['weight'])
+        edge_sel =(g_new.es.select(_source=vs)['weight'])
+ 
+        weight = sum(edge_sel)
         weights[i] = weight
     questionable_z = []
     for i in v_names:
@@ -1841,13 +1844,15 @@ def candidate_to_remove(G, v_names,z = -5):
             else:
                 others.append(value)
 
-        #ic(own_value, others)
+        print(own_value, others)
         seq_z = (own_value - np.mean(others))/np.std(others)
-        #ic("sequence ", i, " zscore ", seq_z)
+        print("sequence ", i, " zscore ", seq_z)
 
-
+        print("num_prots", num_prots)
+        print(own_value/len(others))
         if seq_z < z:
-            questionable_z.append(i)
+           if (own_value/len(others)) <= 0.8: # Only exclude if not relatively similar to other sequences
+                questionable_z.append(i)
 
     #ic("questionable_z", questionable_z)
     return(questionable_z)
@@ -2916,9 +2921,13 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
 
     with ThreadPoolExecutor() as executor:
+        #max_pool_size = executor._max_workers
+
+        #print("Maximum pool size:", max_pool_size)
+
         all_gap_edgelists = list(executor.map(get_edges, unassigned))
     edgelist = [edge for gap_edgelist in all_gap_edgelists for edge in gap_edgelist]
-    print("Time getting gap edgelist parallel thread {}".format(time() - gap_time4))
+    logging.info("Time getting gap edgelist parallel thread {}".format(time() - gap_time4))
 
 
 
@@ -2930,34 +2939,34 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
 
     # Instead of full edgelist, just do a  minimum spanning tree to allow finding islands
 
-    new_clusters_from_rbh = []
-    all_new_rbh  = []
-    total_address = time()
+    #new_clusters_from_rbh = []
+    #all_new_rbh  = []
+    #total_address = time()
 
     # This is parallelizable here
-    logging.debug("Time for tp2 {}".format(time() - tp2))
-    address_time = time()
+    #logging.debug("Time for tp2 {}".format(time() - tp2))
+    #address_time = time()
     #graphs = []
     #address_time = time()
     #for sub_G in islands.subgraphs():
     #   neighbors = {}
     # 
-    #   #for vertex in sub_G.vs():
-    #   #    vertex_neighbors = sub_G.neighbors(vertex)
-    #   #    logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
-    #   #    neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
-    # 
-    #
-    #   newer_clusters, newer_G, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
+       #for vertex in sub_G.vs():
+       #    vertex_neighbors = sub_G.neighbors(vertex)
+       #    logging.debug("vertex, neighbors {} {}".format(vertex, vertex_neighbors))
+       #    neighbors[vertex['name']] = sub_G.vs[vertex_neighbors]["name"] + [vertex['name']]
+     
+    
+     #  newer_clusters, newer_G, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, pos_to_clustid = pos_to_clustid)
 
-       #newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
+    #   #newer_clusters, newer_rbh, rbh_dict, alternates_dict = address_unassigned_aas(sub_G.vs()['name'], neighbors, I2, minscore = 0.5, ignore_betweenness = False,  betweenness_cutoff = 0.3, minsclustsize = 2, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, args=args)
     #   all_alternates_dict = {**all_alternates_dict, **alternates_dict}
     #   new_clusters_from_rbh  = new_clusters_from_rbh + newer_clusters
     #   #all_new_rbh = all_new_rbh + newer_rbh
     #   graphs.append(newer_G)
     #        #merge the graphs into one
     #logging.debug("Time to do rbh {}".format(time() - address_time))
-    #print("Time to do rbh {}".format(time() - address_time))
+    #logging.info("Time to do rbh {}".format(time() - address_time))
 
     def process_subgraph(sub_G, I2, rbh_dict, pos_to_clustid, apply_walktrap):
     
@@ -3002,7 +3011,7 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
         new_clusters_from_rbh.extend(newer_clusters)
         graphs.append(newer_G)
     
-    print("Time to do rbh parallel {}".format(time() - rbh_time2))
+    logging.info("Time to do rbh parallel {}".format(time() - rbh_time2))
    
    
     
@@ -3089,13 +3098,13 @@ def fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid
     remove_start = time()
     clusters_new = remove_overlap_with_old_clusters(new_clusters_filt, clusters_filt)
     clusters_merged = clusters_new + clusters_filt
-    logging.debug("Time to remove overlap {}".format(time() - remove_start))
+    logging.info("Time to remove overlap {}".format(time() - remove_start))
  
     organize_start = time()
     cluster_order, clustid_to_clust, pos_to_clustid, alignment = organize_clusters(clusters_merged, seqs_aas, gapfilling_attempt, minclustsize, all_alternates_dict = all_alternates_dict, seqnames = seqnames, args = args)
-    logging.debug("Time to organize {}".format(time() - organize_start))
+    logging.info("Time to organize {}".format(time() - organize_start))
 
-    logging.debug("Time to do whole fill_in_unassigned_w_clustering {}".format(time() - start_cluster))
+    logging.info("Time to do whole fill_in_unassigned_w_clustering {}".format(time() - start_cluster))
     #print("clustid_to_clust after feedback arc removal", clustid_to_clust)
     #print(too_small)
     final_G = None
