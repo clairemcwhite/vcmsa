@@ -14,10 +14,10 @@ from vcmsa.vcmsa_embed import parse_fasta_for_embed, get_embeddings
 from vcmsa.vcmsa_utils import *
  
 
-# Printing for debugging with icecream
+##printing for debugging with icecream
 try:
     from icecream2 import ic
-    ic.configureOutput(includeContext=True, outputFunction=print) # Prints line number and function
+    ic.configureOutput(includeContext=True, outputFunction=print) ##prints line number and function
 except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
@@ -146,7 +146,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
     padded_seqlen = aa_embeddings.shape[1]
 
 
-    logging.info("Flattening hidden states list")
+    logging.debug("Flattening hidden states list")
     hidden_states = np.array(reshape_flat(aa_embeddings)) # This is now numseqs*padded_seqlen x embedding_dim
     seqnums = list(range(0, len(seqs)))
     seqs_aas, seq_to_length = get_seqs_aas(seqs, seqnums)
@@ -184,7 +184,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
     cluster_seqs_list = []
    
 
-    logging.info("Removing spaces from sequences")
+    logging.debug("Removing spaces from sequences")
     if do_clustering == True:
         #ic("fastgreedy")
         #ic(G)
@@ -230,7 +230,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
                 for x in outputs_list:
                     outfile.write("{}\n".format(x))
         if sim_only:
-            print("Quiting after saving sequence similarities at {}".format(outfile))
+           #print("Quiting after saving sequence similarities at {}".format(outfile))
             exit(0)
 
         # Rebuild G
@@ -285,7 +285,7 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
                     to_exclude = list(set(to_exclude))
                     #ic("to_exclude_post", to_exclude)
                     if to_exclude:       
-                        logging.info("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
+                        logging.debug("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
                         #ic("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
     
                 hstates = []
@@ -321,10 +321,10 @@ def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outf
             #ic('vertix_id', to_delete_ids)
             G.delete_vertices(to_delete_ids) 
     
-            logging.info("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
+            logging.debug("Excluding following sequences: {}".format(",".join([str(x) for x in to_exclude])))
     
          else:
-           logging.info("Not removing outlier sequences")
+           logging.debug("Not removing outlier sequences")
            to_exclude = []
  
  
@@ -386,13 +386,13 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     rbh_only = args.rbh_only
     bhf = args.bhf
 
-    logging.info("Flattening hidden states list")
+    logging.debug("Flattening hidden states list")
     hidden_states = np.array(reshape_flat(hstates_list), dtype="float32")
-    logging.info("embedding_shape: {}".format(hidden_states.shape))
+    logging.debug("embedding_shape: {}".format(hidden_states.shape))
 
 
     
-    logging.info("Convert index position to amino acid position")
+    logging.debug("Convert index position to amino acid position")
 
     seqs_aas, seq_to_length = get_seqs_aas(seqs, seqnums)
     index_to_aa, hidden_states, seqnum_to_index, batch_list = remove_maxlen_padding(hidden_states, seqs_aas, padded_seqlen)
@@ -409,7 +409,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
             png_hidden_out = "{}/{}.alignment_group{}.postbatch.png".format(record_dir, outfile_name, alignment_group)
             do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
 
-    logging.info("maxlen padding removed")   
+    logging.debug("maxlen padding removed")   
     #print("maxlen padding removed")
 
     if pca_plot:
@@ -423,7 +423,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     index= build_index_flat(hidden_states, scoretype = "cosinesim", normalize_l2 = False) # Already normalized
 
     res = faiss.StandardGpuResources()  # use a single GPU
-    print("Cuda available?", torch.cuda.is_available())
+   #print("Cuda available?", torch.cuda.is_available())
 
     if torch.cuda.is_available():
        index = faiss.index_cpu_to_gpu(res, 0, index)
@@ -431,7 +431,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
        logging.debug("KNN search significantly faster on a GPU")
 
     #print("index built")
-    logging.info("Index built") 
+    logging.debug("Index built") 
 
     start = time()
     k= numseqs * 20 
@@ -440,14 +440,14 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     D1, I1 =  index.search(hidden_states, k = k) 
     #logging.debug("D1".format(D1))
     end = time()
-    logging.info("KNN done")
+    logging.debug("KNN done")
     start = time()
     I2 = split_distances_to_sequence(D1, I1, index_to_aa, numseqs, seqlens) 
     end = time()
     # I2 is a dictionary of dictionaries of each aa1: { 1: [[aa1:1.0], [aa2:0.8]}
-    logging.info("Split results into proteins done")
+    logging.debug("Split results into proteins done")
 
-    logging.info("get best hitlist")
+    logging.debug("get best hitlist")
     minscore1 = minscore1
 
     #hitlist_all = get_besthits(I2, minscore = 0) # No threshold for first clustering.
@@ -492,7 +492,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     with ThreadPoolExecutor() as executor:
         graphs = list(executor.map(process_hitlist, new_hitdict.items()))
     # Parallel reduces time by about a third
-    logging.info("Time full parallel rbh {}".format(time() - full_parallel_rbhtime))
+    logging.debug("Time full parallel rbh {}".format(time() - full_parallel_rbhtime))
 
 
     #full_rbhtime = time()
@@ -516,7 +516,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     #        G = graph_from_rbh(new_rbh)
     #        graphs.append(G)
 #
-    # logging.info("Time full rbh {}".format(time() - full_rbhtime))
+    # logging.debug("Time full rbh {}".format(time() - full_rbhtime))
 
     #merge the graphs into one
     # This can be slow for large networks
@@ -530,7 +530,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     #print(G)
     #print(G.es['weight'])
     #add commandline argument to stop here
-    print('IN NEW VERSION')
+   #print('IN NEW VERSION')
    
     if rbh_outfile:
            #rbh_outfile = "tester.csv"
@@ -557,7 +557,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     #print(end - start)
 
 
-    logging.info("got reciprocal best hits")
+    logging.debug("got reciprocal best hits")
    
 
     #rbh_list = remove_streakbreakers(rbh_list, seqs_aas, seqlens, streakmin = 2)
@@ -692,7 +692,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     ############## CONTROL LOOP ###################
     for gapfilling_attempt in range(0, max_iterations):
         gapfilling_attempt = gapfilling_attempt + 1
-        logging.info("Main gapfilling_attempt {}".format(gapfilling_attempt))
+        logging.debug("Main gapfilling_attempt {}".format(gapfilling_attempt))
         if gapfilling_attempt > 6 and minclustsize > 2 and gapfilling_attempt % 2 == 1:
                 minclustsize = minclustsize - 1
                         #MINCLUSTSIZE CHANGE TO 0
@@ -705,7 +705,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
            #ic("unassign", x)
 
         if len(unassigned) == 0:
-            logging.info("Alignment complete after gapfilling attempt {}".format(gapfilling_attempt - 1))
+            logging.debug("Alignment complete after gapfilling attempt {}".format(gapfilling_attempt - 1))
      
             alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
             return(alignment, index, hidden_states, index_to_aa)
@@ -713,7 +713,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
         if ( gapfilling_attempt == max_iterations or unassigned == history_unassigned['threebefore'] or  unassigned == history_unassigned['twobefore'] ) and gapfilling_attempt > 10:
             if minscore > 0.1 and gapfilling_attempt != max_iterations:
                 minscore = 0.1
-                logging.info("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
+                logging.debug("reducing minscore to {} at gapfilling attempt {}".format(minscore, gapfilling_attempt))
             ################ Final stage #############3
             else: 
                 alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names)
@@ -723,8 +723,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
                     alignment = most_complete_alignment
                 else:
-                    logging.info("Currently alignment is the most complete so far")
-                logging.info("Placing remaining amino acids")
+                    logging.debug("Currently alignment is the most complete so far")
+                logging.debug("Placing remaining amino acids")
                 cluster_order, clustid_to_clust, pos_to_clustid, alignment = fill_in_hopeless(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states, gapfilling_attempt, args = args)
                 unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
                 #ic('This unassigned should be empty', unassigned)
@@ -741,7 +741,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
         # Do one or two rounds of clustering between guideposts
         if gapfilling_attempt in list(range(1, max_iterations, 2)):#  or gapfilling_attempt in [1, 2, 3, 4]:
-            logging.info("Align by clustering within guideposts during gapfilling {}".format(gapfilling_attempt))
+            logging.debug("Align by clustering within guideposts during gapfilling {}".format(gapfilling_attempt))
             # Don't allow modification of previous guideposts
             if gapfilling_attempt > 4:
                  apply_walktrap = True
@@ -751,14 +751,14 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                 # This removes 'stranded' amino acids, where neither the previous or next amino acid are placed adjacent. 
                 # If a good cluster, will be added right back
 
-               logging.info("running address stranded")
+               logging.debug("running address stranded")
                cluster_order, clustid_to_clust = address_stranded(alignment)
                alignment = make_alignment(cluster_order, seqnums, clustid_to_clust, seq_names) 
                clusterlist = list(clustid_to_clust.values())
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
-            logging.info("Align by clustering reciprocal best hit network")
+            logging.debug("Align by clustering reciprocal best hit network")
             start_clustering = time()
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, too_small, rbh_dict, all_new_G = fill_in_unassigned_w_clustering(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, I2,  gapfilling_attempt, minscore = minscore ,minclustsize = minclustsize, ignore_betweenness = ignore_betweenness, betweenness_cutoff = betweenness_cutoff, apply_walktrap = apply_walktrap, rbh_dict = rbh_dict, seqnames = seq_names, args = args)
             logging.debug("Time to cluster {}".format(time() - start_clustering))
@@ -774,8 +774,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
         else:
             
-            logging.info("Align by best match (looser)")
-            logging.info("Add aa's to existing clusters")
+            logging.debug("Align by best match (looser)")
+            logging.debug("Add aa's to existing clusters")
             if gapfilling_attempt > 3:
               if gapfilling_attempt < 15: 
                 # This removes 'stranded' amino acids. 
@@ -784,16 +784,16 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
                new_clusterlist = []
                pos_to_clustid, clustid_to_clust = get_cluster_dict(clusterlist)
                unassigned = get_unassigned_aas(seqs_aas, pos_to_clustid)
-            logging.info("starting looser")
+            logging.debug("starting looser")
             cluster_order, clustid_to_clust, pos_to_clustid, alignment, match_dict = fill_in_unassigned_w_search(unassigned, seqs_aas, cluster_order, clustid_to_clust, pos_to_clustid, index, hidden_states,  index_to_aa, gapfilling_attempt, minclustsize = minclustsize, remove_both = True, match_dict= match_dict, seqnames = seq_names, args = args, I2 = I2)
-            logging.info("looser complete")
+            logging.debug("looser complete")
 
             too_small = []
 
 
         # THINGS TO DO AT THE END OF GAPFILLING CYCLE
         if alignment.numassigned > most_complete_alignment.numassigned:
-            logging.info("This is the most complete alignment so far")
+            logging.debug("This is the most complete alignment so far")
             most_complete_alignment = alignment
    
         outaln = "{}/{}.alignment_clustering_group_{}_gapfilling_{:04}.aln".format(record_dir, outfile_name, alignment_group, gapfilling_attempt)
@@ -879,7 +879,7 @@ if __name__ == '__main__':
 
 
     logging.basicConfig(filename=logname, level=loglevel, format=log_format)
-    logging.info("This message is from the main script")
+    logging.debug("This message is from the main script")
 
 
     if heads is not None:
@@ -889,15 +889,15 @@ if __name__ == '__main__':
 
     else:
        headnames = None
-    logging.info("Check for torch")
-    logging.info(torch.cuda.is_available())
+    logging.debug("Check for torch")
+    logging.debug(torch.cuda.is_available())
 
     minscore1 = 0.5
 
-    logging.info("model: {}".format(model_name))
-    logging.info("fasta: {}".format(fasta_path))
-    logging.info("padding: {}".format(padding))
-    logging.info("first score thresholds: {}".format(minscore1))
+    logging.debug("model: {}".format(model_name))
+    logging.debug("fasta: {}".format(fasta_path))
+    logging.debug("padding: {}".format(padding))
+    logging.debug("first score thresholds: {}".format(minscore1))
    
     seq_names, seqs, seqs_spaced = parse_fasta_for_embed(fasta_path, padding = padding)
 
@@ -915,14 +915,14 @@ if __name__ == '__main__':
 
     else:
         seqlens = [len(x) for x in seqs]
-        print("printing model_name:")
-        print(model_name)
-        print("printing seq_lens")
-        print(seqlens)
-        print("printing layers")
-        print(layers)
-        print("printing padding")
-        print(padding)
+       #print("printing model_name:")
+       #print(model_name)
+       #print("printing seq_lens")
+       #print(seqlens)
+       #print("printing layers")
+       #print(layers)
+       #print("printing padding")
+       #print(padding)
         #print("printing headnames")
         #print(headnames)
         embedding_dict = get_embeddings(seqs_spaced,
@@ -999,7 +999,7 @@ if __name__ == '__main__':
             cluster_order, clustid_to_clust = clusts_from_alignment(alignment)
             squish = True
             if squish == True: 
-                logging.info("attempt squish, merging adjacent non-overlapping clusters")       
+                logging.debug("attempt squish, merging adjacent non-overlapping clusters")       
                 for rep in range(0,20):
                      prevclust = alignment
                      cluster_order, clustid_to_clust = squish_clusters(alignment, index, hidden_states, index_to_aa)                
