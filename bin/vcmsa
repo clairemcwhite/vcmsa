@@ -95,7 +95,7 @@ def get_align_args():
     parser.add_argument("-p", "--padding", dest = "padding",  type = int, required = False, default = 0, 
                         help="Number of characters of X to add to start and end of sequence (can be important for fragment sequences), default: 0")
     parser.add_argument("-mi", "--max_iterations", dest = "max_iterations",  type = int, required = False, default = 100, 
-                        help="Number of iterations of limited search to run, default: 100")
+                        help="Number of iterations of limited search to run before increasing sequence threshold, default: 100")
 
     parser.add_argument("-l2", "--headnorm", dest = "headnorm",  action = "store_true", required = False, 
                         help="Take L2 normalization of each head")
@@ -127,20 +127,21 @@ def get_align_args():
     parser.add_argument("-zc", "--zero_center", dest = "zero_center", action = "store_true", 
                         help="If added, do zero centering on sequences in batch correction, rather than running ComBat (requires --batch_correct)")
 
+    parser.add_argument("-rb", "--ref_only", dest = "ref_only", action = "store_true", 
+                        help="If added, add ref_only parameter to batch correction")
+
+
+
+    parser.add_argument("-dc", "--do_clustering", dest = "do_clustering", action='store_true',
+                        help="If flagged, does sequence clustering into subgroups")
     args = parser.parse_args()
 
     return(args)
 
 
  
-<<<<<<< HEAD
-@profile
-def get_seq_groups(seqs, seq_names, embedding_dict, logging, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75, pca_plot = False):
-=======
 #@profile
 def get_seq_groups(seqs, seq_names, embedding_dict, exclude, do_clustering, outfile_name, record_dir, seqsim_thresh = 0.75, pca_plot = False):
-
->>>>>>> f0a3b1f23023253403594339b6f8ce062567c5f3
     aa_embeddings = embedding_dict['aa_embeddings'] # this is numseqs x padded_seqlen x embedding_dim
     padded_seqlen = aa_embeddings.shape[1]
 
@@ -367,6 +368,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     outfile_name = args.outfile_name
     batch_correct = args.batch_correct
     zero_center = args.zero_center
+    ref_only = args.ref_only
     seqlens = [len(x) for x in seqs]
     max_iterations = args.max_iterations # default 100
     if len(seqlens) > max_iterations:
@@ -401,7 +403,8 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
 
     if batch_correct:
         #ic( list(range(len(seqs_aas)))) 
-        hidden_states = do_batch_correct(hidden_states, list(range(len(seqs_aas))), batch_list, zero_center)
+        hidden_states = do_batch_correct(hidden_states, list(range(len(seqs_aas))), batch_list, zero_center, ref_only)
+        hidden_states = np.asarray(hidden_states, order='C') # Required for faiss as well as pca plot
         if pca_plot:
             png_hidden_out = "{}/{}.alignment_group{}.postbatch.png".format(record_dir, outfile_name, alignment_group)
             do_pca_plot(hidden_states, index_to_aa, png_hidden_out, seq_to_length = seq_to_length)
@@ -456,40 +459,64 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     #new_hitdict = get_besthits(I2, minscore = 0.5) #added threshold of 0.5
     new_hitdict = get_besthits(I2, minscore = 0.7)
     #print("printing new_hitdict: \n", new_hitdict)
-    graphs = []
-    for k,v in new_hitdict.items():
-        #print("printing key")
-        #print(k)
-        #print("printing value")
-        #print(v)
+
+
+
+
+    def process_hitlist(k_v):
+    
+        k, v = k_v
+    
         if bhf == "rbh":
             new_rbh = get_rbhs(v)
+    
         elif bhf == "no_rbh":
             new_rbh = v
-        #print("first new_rbh")
-        #print(new_rbh)
-
-        #add commandline argument to do with or without maximum increasing subsequence
+    
         if mis == True:
-            logging.info("doing maximum increasing subsequence")
             new_rbh = maximum_increasing(new_rbh)
-            #print("second new_rbh")
-            #print(new_rbh)
-
-                 
-        #if mnc and wmnc flags are both on, perform weighted
+    
         if wmnc == True:
             G = graph_from_hits_noncrossing(new_rbh, wmnc = wmnc)
-            logging.info("doing weighted maximum non crossing")
-            graphs.append(G) 
+    
         elif mnc == True:
-            #print("rbh after mnc", new_rbh)
-            logging.info("doing unweighted maximum non crossing")
             G = graph_from_hits_noncrossing(new_rbh)
-            graphs.append(G)
+    
         else:
             G = graph_from_rbh(new_rbh)
-            graphs.append(G)
+    
+        return G
+    
+    full_parallel_rbhtime = time()
+    
+    with ThreadPoolExecutor() as executor:
+        graphs = list(executor.map(process_hitlist, new_hitdict.items()))
+    # Parallel reduces time by about a third
+    logging.info("Time full parallel rbh {}".format(time() - full_parallel_rbhtime))
+
+
+    #full_rbhtime = time()
+    #graphs = []
+    #for k,v in new_hitdict.items():
+    #    if bhf == "rbh":
+    #        new_rbh = get_rbhs(v)
+    #    elif bhf == "no_rbh":
+    #        new_rbh = v
+    #    if mis == True:
+    #        new_rbh = maximum_increasing(new_rbh)
+    #             
+    #    #if mnc and wmnc flags are both on, perform weighted
+    #    if wmnc == True:
+    #        G = graph_from_hits_noncrossing(new_rbh, wmnc = wmnc)
+    #        graphs.append(G) 
+    #    elif mnc == True:
+    #        G = graph_from_hits_noncrossing(new_rbh)
+    #        graphs.append(G)
+    #    else:
+    #        G = graph_from_rbh(new_rbh)
+    #        graphs.append(G)
+#
+    # logging.info("Time full rbh {}".format(time() - full_rbhtime))
 
     #merge the graphs into one
     # This can be slow for large networks
@@ -498,7 +525,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     # potentially keep as rbh_list instead of G, to avoid igraph union slowness
     G = igraph.union(graphs, byname=True)
     # Can be half a second
-    print(f"Time for initial union {time() - union_time}")
+    #print(f"Time for initial union {time() - union_time}")
 
     #print(G)
     #print(G.es['weight'])
@@ -506,7 +533,7 @@ def do_msa(seqs, seq_names, seqnums, hstates_list,  minscore1 = 0.5, alignment_g
     print('IN NEW VERSION')
    
     if rbh_outfile:
-           rbh_outfile = "tester.csv"
+           #rbh_outfile = "tester.csv"
            with open(rbh_outfile, "w") as fOut:
                 for e in G.es:
                    
@@ -813,8 +840,10 @@ if __name__ == '__main__':
     headnorm = args.headnorm
     padding =args.padding
     seqsim_thresh  = args.seqsimthresh 
-    #set do_clustering to False for pca tests
+    do_clustering = args.do_clustering
     do_clustering = True
+
+    #set do_clustering to False for pca tests
     loglevel = args.loglevel
     cpu_only = args.cpu_only
     # get place to store output file

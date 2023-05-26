@@ -15,7 +15,10 @@ except ImportError:  # Graceful fallback if IceCream isn't installed.
     ic = lambda *a: None if not a else (a[0] if len(a) == 1 else a)  # noqa
 
 # This is combat with patsy requirement removed
-from vcmsa.combat_vsmsa_mod import combat
+#from vcmsa.combat_vsmsa_mod import combat
+from combat.pycombat import pycombat
+
+
 #from transformer_infrastructure.feedback import remove_feedback_edges_old
 
 from concurrent.futures import ThreadPoolExecutor
@@ -1007,7 +1010,7 @@ def reshape_flat(hstates_list):
     return(hidden_states)
 
 #@profile
-def do_batch_correct(hidden_states, levels, batch_list, zero_center = False):
+def do_batch_correct(hidden_states, levels, batch_list, zero_center = False, ref_only = False):
     #normalize this df for batch correction
     #if we normalize we need to transform normalized embeddings. 
     #or do the transformed normalized embeddings also work?
@@ -1067,12 +1070,20 @@ def do_batch_correct(hidden_states, levels, batch_list, zero_center = False):
         # print("printing design:\n", design)
 
 
-        hidden_states_batch = combat(hidden_states_normalized_pd, batch_list, design)
+        #hidden_states_batch = combat(hidden_states_normalized_pd, batch_list, design)
+        print(batch_list)
+        if ref_only:
+            hidden_states_batch = pycombat(hidden_states_normalized_pd, pd.Series(batch_list), ref_batch = 0)
+        else: 
+            hidden_states_batch = pycombat(hidden_states_normalized_pd, pd.Series(batch_list))
+  
+        #return(0)
         #print("about to run harmony")
         ##hidden_states_batch_harmony = harmonize(hidden_states_normalized_array, batch_df, batch_key = 'batch')
-    # print("harmony ran")
+        # print("harmony ran")
         #print("harmony output: \n", hidden_states_batch_harmony)
         #ic(hidden_states_batch)
+        #x = numpy.asarray(x, order='C')
         hidden_states_corrected = np.array(hidden_states_batch).T.astype(np.float32)
         ##hidden_states_corrected_harmony = np.ascontiguousarray(hidden_states_batch_harmony.astype(np.float32))
         print("printing hidden_states_corrected")
@@ -1237,7 +1248,7 @@ def get_rbhs(hitlist_top, min_edges = 0):
     [aa1, aa2, score (higher = better]
     '''
 
-    logger.info("Get reciprocal best hits")
+    #logger.info("Get reciprocal best hits")
 
     G_hitlist = igraph.Graph.TupleList(edges=hitlist_top, directed=True)
     #print(hitlist_top)
@@ -1253,7 +1264,7 @@ def get_rbhs(hitlist_top, min_edges = 0):
     targets = [G_hitlist.vs[x.target]['name'] for x in G_hitlist.es()]
     weights = G_hitlist.es()['weight']
 
-    logger.debug("len check {} {} {}".format(len(sources), len(targets),len(weights)))
+    #logger.debug("len check {} {} {}".format(len(sources), len(targets),len(weights)))
     hitlist = list(zip(sources,targets, weights))
 
     return(hitlist)
@@ -1434,13 +1445,13 @@ def graph_from_hits_noncrossing(rbh_list, directed = False, wmnc=False):
     G.vs['name'] = names
     if G.vcount() != 0:
         if wmnc:
-            logging.info("doing weighted labeling")
+            #logging.info("doing weighted labeling")
             labeled_G,k_list = labeling_weighted(G)
             #print("doing weighted edge selection")
             final, soln_found = edge_selection_weighted(labeled_G, k_list, [])
 
         else:
-            logging.info("doing labeling unweighted")
+            #logging.info("doing labeling unweighted")
             labeled_G,k = labeling(G)
             #print("doing edge selection not weighted")
             final, soln_found = edge_selection(labeled_G, k, [])
@@ -3346,14 +3357,36 @@ def address_unassigned_aas(scope_aas, I2, minscore = 0.5, ignore_betweenness = F
 
             new_hitdict = get_besthits(limited_I2, minscore)
             #print("printing new_hitdict: \n", new_hitdict)
+
+
+
+            #def process_item(k_v):
+            #    k, v = k_v
+            #    new_rbh = get_rbhs(v)
+            #    new_rbh = maximum_increasing(new_rbh)
+            #    G = graph_from_hits_noncrossing(new_rbh, wmnc = False)
+            #    return G
+            
+            #graphs = []
+           # 
+            #internal_parallel_rbhtime = time()
+            #with ThreadPoolExecutor() as executor:
+            #    graphs = list(executor.map(process_item, new_hitdict.items()))
+            # Parallel slower in general
+            #logging.debug("Time internal parallel rbh {}".format(time() - internal_parallel_rbhtime))
+           
+
             graphs = []
             internal_rbhtime = time()
+            # Go through each pair of sequences
             for k,v in new_hitdict.items():
 
                 new_rbh = get_rbhs(v)
-                new_rbh = maximum_increasing(new_rbh)
+                # Creates scaling issues for large numbers of sequences
+                #new_rbh = maximum_increasing(new_rbh)
                 #rbh_dict[frozenset(scope_aas)] = new_rbh
-                G = graph_from_hits_noncrossing(new_rbh, wmnc = False)
+                #G = graph_from_hits_noncrossing(new_rbh, wmnc = False)
+                G = graph_from_rbh(new_rbh)
                 graphs.append(G)
 
             logging.debug("Time internal rbh {}".format(time() - internal_rbhtime))
