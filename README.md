@@ -15,12 +15,12 @@ This is an alpha version of the algorithm code that functions as a proof-of-conc
 
 #### Authors
 Claire D. McWhite
-
+Isabel Armour-Garb
 Mona Singh
 
 ### Citation
 
-CD McWhite, M Singh, "Vector-clustering Multiple Sequence Alignment: Aligning into the twilight zone of protein sequence similarity with protein language models", BioRXiv, 2022
+CD McWhite, I Armour-Garb, M Singh, "Leveraging protein language models for accurate multiple sequence alignments", Genome Research, 2023
 
 ### Inputs
 
