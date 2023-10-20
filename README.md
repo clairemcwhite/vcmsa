@@ -15,7 +15,9 @@ This is an alpha version of the algorithm code that functions as a proof-of-conc
 
 #### Authors
 Claire D. McWhite
+
 Isabel Armour-Garb
+
 Mona Singh
 
 ### Citation
